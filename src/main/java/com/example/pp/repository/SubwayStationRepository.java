@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface SubwayStationRepository extends JpaRepository<SubwayStation, String> {
 
@@ -70,4 +71,9 @@ public interface SubwayStationRepository extends JpaRepository<SubwayStation, St
             @Param("lon") double lon,
             @Param("radiusMeters") double radiusMeters
     );
+    @Query(value = "SELECT * FROM subway_station WHERE station_id = :code LIMIT 1", nativeQuery = true)
+    Optional<SubwayStation> findOneByStationId(@Param("code") String stationCode);
+
+    @Query(value = "SELECT * FROM subway_station WHERE station_name = :name LIMIT 1", nativeQuery = true)
+    Optional<SubwayStation> findOneByStationName(@Param("name") String stationName);
 }

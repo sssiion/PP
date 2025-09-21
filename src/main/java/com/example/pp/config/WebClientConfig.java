@@ -9,7 +9,6 @@ import reactor.core.publisher.Mono;
 
 @Configuration
 public class WebClientConfig {
-
     private static ExchangeFilterFunction errorFilter() {
         return ExchangeFilterFunction.ofResponseProcessor(resp -> {
             if (resp.statusCode().isError()) return resp.createException().flatMap(Mono::error);
@@ -17,14 +16,12 @@ public class WebClientConfig {
         });
     }
 
-    // Tour: 단일 게이트웨이
     @Bean(name = "tourWebClient")
     public WebClient tourWebClient(WebClient.Builder builder,
                                    @Value("${tour.api.base-url}") String baseUrl) {
         return builder.baseUrl(baseUrl).filter(errorFilter()).build();
     }
 
-    // TAGO: 데이터셋별 게이트웨이
     @Bean(name = "tagoBusStopWebClient")
     public WebClient tagoBusStopWebClient(WebClient.Builder builder,
                                           @Value("${tago.busstop.base-url}") String baseUrl) {
@@ -58,6 +55,13 @@ public class WebClientConfig {
     @Bean(name = "tagoTrainWebClient")
     public WebClient tagoTrainWebClient(WebClient.Builder builder,
                                         @Value("${tago.train.base-url}") String baseUrl) {
+        return builder.baseUrl(baseUrl).filter(errorFilter()).build();
+    }
+
+    // Seoul Metro OpenAPI (http://openapi.seoul.go.kr:8088)
+    @Bean(name = "seoulMetroWebClient")
+    public WebClient seoulMetroWebClient(WebClient.Builder builder,
+                                         @Value("${seoulmetro.api.base-url}") String baseUrl) {
         return builder.baseUrl(baseUrl).filter(errorFilter()).build();
     }
 }
