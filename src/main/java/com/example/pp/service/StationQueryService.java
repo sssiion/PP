@@ -16,7 +16,7 @@ public class StationQueryService {
 
     // 엔티티 그대로 반환(반경 50m 고정)
     public List<staion_info> within50m(double lat, double lon) {
-        return repo.findAllWithinRadiusOrderByDistanceAsc(lat, lon, FIXED_RADIUS_M);
+        return repo.findAllWithinRadiusOrderByDistanceAsc(lat, lon);
     }
 
     // 거리 포함 프로젝션(반경 50m 고정)

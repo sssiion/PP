@@ -20,21 +20,36 @@ public record TourPoiResponse(
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static record Item(
-            String contentid,
-            String contenttypeid,
-            String title,
+
+
+
+
             String addr1,
             String addr2,
             String areacode,
-            String sigungucode,
             String cat1,
             String cat2,
             String cat3,
-            String firstimage,
-            String firstimage2,
-            String zipcode,
-            String tel,
+            String contentid,
+            String contenttypeid,
+            String day,
+            String dist,
+            String firstimage, //원본
+            String firstimage2, // 썸네일
+            String cpy,
             @JsonProperty("mapx") Double mapX, // 경도
-            @JsonProperty("mapy") Double mapY  // 위도
+            @JsonProperty("mapy") Double mapY,  // 위도
+            String mapLevel,
+            String modifyday,
+            String sigungucode,
+            String tel,
+            String title,
+            String IDongRegnCd,
+            String IDongSigunguCd,
+            String cls1,
+            String cls2,
+            String cls3,
+            String zipcode
+
     ){}
 }

@@ -73,6 +73,14 @@ public class TourApiV2Client {
                         .queryParam("numOfRows", 10000)
                         .build())
                 .retrieve()
-                .bodyToMono(TourPoiResponse.class);
+                .bodyToMono(TourPoiResponse.class)
+                .doOnError(e -> log.error("[TourAPI 오류] 지역기반(서울) 실패: {}", e.toString(), e))
+                .doOnSuccess(r -> {
+                    Integer cnt = Optional.ofNullable(r).map(TourPoiResponse::response)
+                            .map(TourPoiResponse.Resp::body)
+                            .map(TourPoiResponse.Body::totalCount)
+                            .orElse(null);
+                    log.info("[TourAPI 응답] 지역기반(서울) totalCount={}", cnt);
+                });
     }
 }
