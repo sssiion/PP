@@ -56,24 +56,43 @@ public class List3BuildService {
             if (rows.isEmpty()) {log.warn("[역명 검색 결과 없음] 시드 좌표를 생성할 수 없음"); return Mono.just(new TwoSeeds(0,0,0,0)); }
             var first = rows.get(0);
             String line = first.lineNum();
-            String stationCd = first.stationCode();
+            //String stationCd = first.stationCode();
             // 노선 전체 역
             return seoul.fetchLineStationsMax(line).map(resp -> {
                 var stops = Optional.ofNullable(resp.service()).map(LineStationsResponse.ServiceBlock::rows)
                         .orElseGet(List::of);
                 log.info("[노선 정차역 조회] 행 수={}", stops.size());
-                int idx = -1;
-                for (int i=0;i<stops.size();i++) {
-                    if (stationCd.equals(stops.get(i).stationCode())) { idx = i; break; }
+                // 1) 정차역 좌표 해석
+                record StopCoord(int idx, double lat, double lon) {}
+                List<StopCoord> coords = new ArrayList<>();
+                for (int i=0; i<stops.size(); i++) {
+                    var r = stops.get(i);
+                    var c = resolveCoord(r.stationCode(), r.stationNameKo());
+                    if (!(c.lon()==0 && c.lat()==0)) coords.add(new StopCoord(i, c.lat(), c.lon()));
                 }
-                if (idx < 0) {log.warn("[정차역 목록에 기준역 없음] stationCode={}", first.stationCode()); return new TwoSeeds(0,0,0,0);}
-                // 다음 2개 역(경계 체크)
-                var s1 = stops.get(Math.min(idx+1, stops.size()-1));
-                var s2 = stops.get(Math.min(idx+2, stops.size()-1));
+                if (coords.isEmpty()) {
+                    log.warn("[좌표 해석 실패] 시드 좌표를 생성할 수 없음");
+                    return new TwoSeeds(0,0,0,0);
+                }
+
+                // 2) 현재 위치에서 가장 가까운 역 인덱스 선택
+                int nearestIdx = coords.stream()
+                        .min(Comparator.comparingDouble(sc -> Geo.haversineMeters(
+                                /* current */ lat, lon, sc.lat(), sc.lon())))
+                        .map(StopCoord::idx).orElse(0);
+
+                // 3) 아래 2개 역(경계 클램프)
+                int i1 = Math.min(nearestIdx + 1, stops.size() - 1);
+                int i2 = Math.min(nearestIdx + 2, stops.size() - 1);
+
+                var s1 = stops.get(i1);
+                var s2 = stops.get(i2);
                 var c1 = resolveCoord(s1.stationCode(), s1.stationNameKo());
                 var c2 = resolveCoord(s2.stationCode(), s2.stationNameKo());
-                log.info("[시드 좌표 결정] 시드1=({}, {}), 시드2=({}, {})", c1.lat, c1.lon, c2.lat, c2.lon);
-                return new TwoSeeds(c1.lon, c1.lat, c2.lon, c2.lat);
+
+                log.info("[시드 좌표 결정] 기준Idx={}, 다음Idx들=({}, {}), 시드1=({}, {}), 시드2=({}, {})",
+                        nearestIdx, i1, i2, c1.lat(), c1.lon(), c2.lat(), c2.lon());
+                return new TwoSeeds(c1.lon(), c1.lat(), c2.lon(), c2.lat());
             });
         });
 
