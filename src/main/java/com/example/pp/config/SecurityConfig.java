@@ -23,9 +23,8 @@ public class SecurityConfig {
                 // 요청 경로에 대한 접근 권한 설정
                 .authorizeHttpRequests(authorize -> authorize
                         // "/api/**" 경로로 오는 모든 요청은 인증 없이 허용
-                        .requestMatchers("/api/**").permitAll()
-                        // 그 외 모든 요청은 인증을 요구 (나중에 필요시 설정)
-                        .anyRequest().authenticated()
+                        .requestMatchers("/api/**", "/actuator/health").permitAll()
+                        .anyRequest().permitAll()  // 모두 공개라면
                 );
 
         return http.build();

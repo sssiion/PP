@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class BusStopQueryService {
     private final TagoBusStopClient client;
-    private static final int FIXED_RADIUS_M = 50;
+    private static final int FIXED_RADIUS_M = 100;
     private static final int DEFAULT_ROWS = 200;
 
     public Mono<List<BusStopDistanceDto>> within50m(double lat, double lon) {

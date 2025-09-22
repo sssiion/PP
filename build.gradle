@@ -23,6 +23,7 @@ configurations {
 repositories {
     mavenCentral()
 }
+bootJar { archiveFileName.set("app.jar") }
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-jdbc'

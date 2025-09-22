@@ -8,16 +8,17 @@ import com.example.pp.dto.SeoulWrap;
 import com.example.pp.dto.StationByName;
 
 import com.example.pp.dto.TourPoiResponse;
-import com.example.pp.entity.SubwayStation;
+import com.example.pp.entity.staion_info;
 import com.example.pp.repository.SubwayStationRepository;
 import com.example.pp.util.Geo;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.DayOfWeek;
-import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -25,7 +26,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class List3BuildService {
-
+    private static final Logger log = LoggerFactory.getLogger(List3BuildService.class);
     private final SubwayStationRepository stationRepo;
     private final SeoulMetroClient seoul;
     private final TourApiV2Client tour;
@@ -33,19 +34,26 @@ public class List3BuildService {
 
     public Mono<List<List3Item>> build(double lat, double lon, LocalTime time,
                                        int windowMin, int radius, int pageSize) {
+        log.info("[리스트3 시작] 위도={}, 경도={}, 시간={}, 윈도우(분)={}, 반경(m)={}, 페이지크기={}",
+                lat, lon, time, windowMin, radius, pageSize);
         // 1) 근접 50m 역 중 가장 가까운 1개
-        List<SubwayStation> near = stationRepo.findAllWithinRadiusOrderByDistanceAsc(lat, lon, 50.0);
-        if (near.isEmpty()) return Mono.just(List.of());
-        SubwayStation base = near.get(0);
+        List<staion_info> near = stationRepo.findAllWithinRadiusOrderByDistanceAsc(lat, lon, 50.0);
+        if (near.isEmpty()) {log.warn("[근처 역 없음] 결과를 빈 리스트로 반환");return Mono.just(List.of());}
+        staion_info base = near.get(0);
 
         // 2) 역명→역코드/호선
-        Mono<SeoulWrap<StationByName.Item>> byNameMono = seoul.searchByStationName(base.getStationName());
+        Mono<SeoulWrap<StationByName.Item>> byNameMono = seoul.searchByStationName(base.getStationName())
+                .doOnSuccess(w -> {
+                    int rows = Optional.ofNullable(w.SearchInfoBySubwayNameService())
+                            .map(SeoulWrap.Result::row).map(List::size).orElse(0);
+                    log.info("[역명 검색 완료] 행 수={}", rows); // 역명 검색 로그 [web:26]
+                });
 
         // 3) 라인별 역 목록 가져와 기준 역 다음 2개 역을 시드로 선택(단순 전개)
         Mono<TwoSeeds> seedsMono = byNameMono.flatMap(wrap -> {
             var rows = Optional.ofNullable(wrap.SearchInfoBySubwayNameService())
                     .map(SeoulWrap.Result::row).orElseGet(List::of);
-            if (rows.isEmpty()) return Mono.just(new TwoSeeds(0,0,0,0));
+            if (rows.isEmpty()) {log.warn("[역명 검색 결과 없음] 시드 좌표를 생성할 수 없음"); return Mono.just(new TwoSeeds(0,0,0,0)); }
             var first = rows.get(0);
             String line = first.lineNum();
             String stationCd = first.stationCode();
@@ -53,30 +61,35 @@ public class List3BuildService {
             return seoul.fetchLineStationsMax(line).map(resp -> {
                 var stops = Optional.ofNullable(resp.service()).map(LineStationsResponse.ServiceBlock::rows)
                         .orElseGet(List::of);
+                log.info("[노선 정차역 조회] 행 수={}", stops.size());
                 int idx = -1;
                 for (int i=0;i<stops.size();i++) {
                     if (stationCd.equals(stops.get(i).stationCode())) { idx = i; break; }
                 }
-                if (idx < 0) return new TwoSeeds(0,0,0,0);
+                if (idx < 0) {log.warn("[정차역 목록에 기준역 없음] stationCode={}", first.stationCode()); return new TwoSeeds(0,0,0,0);}
                 // 다음 2개 역(경계 체크)
                 var s1 = stops.get(Math.min(idx+1, stops.size()-1));
                 var s2 = stops.get(Math.min(idx+2, stops.size()-1));
                 var c1 = resolveCoord(s1.stationCode(), s1.stationNameKo());
                 var c2 = resolveCoord(s2.stationCode(), s2.stationNameKo());
+                log.info("[시드 좌표 결정] 시드1=({}, {}), 시드2=({}, {})", c1.lat, c1.lon, c2.lat, c2.lon);
                 return new TwoSeeds(c1.lon, c1.lat, c2.lon, c2.lat);
             });
         });
 
         // 4) 두 역 좌표로 위치기반 수집(리스트1)
         Mono<List<LocationPoi>> list1Mono = seedsMono.flatMap(seeds -> {
-            if (seeds.empty()) return Mono.just(List.of());
+            if (seeds.empty()) {log.warn("[시드 좌표 없음] 위치기반 수집을 건너뜀");  return Mono.just(List.of());}
             return Flux.just(new Seed(seeds.lon1, seeds.lat1), new Seed(seeds.lon2, seeds.lat2))
                     .flatMap(s -> tour.locationBasedList2(s.lon, s.lat, radius, 1, 200, "C"))
                     .map(r -> Optional.ofNullable(r.response()).map(TourPoiResponse.Resp::body)
                             .map(TourPoiResponse.Body::items).map(TourPoiResponse.Items::item).orElseGet(List::of))
+                    .doOnNext(list -> log.info("[위치기반 수집] 추가 수신 건수={}", list.size()))
                     .flatMapIterable(i -> i)
                     .collect(Collectors.toMap(TourPoiResponse.Item::contentid, i -> i, (a,b)->a))
-                    .map(map -> map.values().stream().map(i -> {
+                    .map(map ->
+
+                            map.values().stream().map(i -> {
                         double d1 = Geo.haversineMeters(seeds.lat1, seeds.lon1, i.mapY(), i.mapX());
                         double d2 = Geo.haversineMeters(seeds.lat2, seeds.lon2, i.mapY(), i.mapX());
                         return new LocationPoi(
@@ -87,7 +100,8 @@ public class List3BuildService {
         });
 
         // 5) 서울 지역기반 전량 수집(리스트2)
-        Mono<List<AreaCollectService.AreaPoi>> list2Mono = areaCollect.collectAllSeoul(pageSize);
+        Mono<List<AreaCollectService.AreaPoi>> list2Mono = areaCollect.collectAllSeoul(pageSize)
+                .doOnSuccess(list -> log.info("[지역기반 수집(서울)] 총 건수={}", list.size()));
 
         // 6) contentId 교집합 → 리스트3
         return Mono.zip(list1Mono, list2Mono).map(tuple -> {

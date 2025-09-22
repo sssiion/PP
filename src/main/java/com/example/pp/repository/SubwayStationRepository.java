@@ -1,14 +1,14 @@
 package com.example.pp.repository;
 
 
-import com.example.pp.entity.SubwayStation;
+import com.example.pp.entity.staion_info;
 import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
 
-public interface SubwayStationRepository extends JpaRepository<SubwayStation, String> {
+public interface SubwayStationRepository extends JpaRepository<staion_info, String> {
 
     @Query(value = """
       SELECT
@@ -31,7 +31,7 @@ public interface SubwayStationRepository extends JpaRepository<SubwayStation, St
            )
         )) ASC
       """, nativeQuery = true)
-        List<SubwayStation> findAllWithinRadiusOrderByDistanceAsc(
+        List<staion_info> findAllWithinRadiusOrderByDistanceAsc(
             @Param("lat") double lat,
             @Param("lon") double lon,
             @Param("radiusMeters") double radiusMeters
@@ -70,8 +70,8 @@ public interface SubwayStationRepository extends JpaRepository<SubwayStation, St
             @Param("radiusMeters") double radiusMeters
     );
     @Query(value = "SELECT * FROM station_info WHERE station_id = :code LIMIT 1", nativeQuery = true)
-    Optional<SubwayStation> findOneByStationId(@Param("code") String stationCode);
+    Optional<staion_info> findOneByStationId(@Param("code") String stationCode);
 
     @Query(value = "SELECT * FROM station_info WHERE station_name = :name LIMIT 1", nativeQuery = true)
-    Optional<SubwayStation> findOneByStationName(@Param("name") String stationName);
+    Optional<staion_info> findOneByStationName(@Param("name") String stationName);
 }

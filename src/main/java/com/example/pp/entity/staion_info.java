@@ -5,12 +5,12 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "station_info")
 @Getter
 @NoArgsConstructor
-public class SubwayStation {
+@Table(name="station_info")
+public class staion_info {
 
-    @Id
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "station_id", nullable = false, length = 50)
     private String stationId;              // 역번
 
@@ -28,8 +28,8 @@ public class SubwayStation {
 
 
 
-    public SubwayStation(String stationId, String stationName,
-                         String lineName, double lat, double lon) {
+    public staion_info(String stationId, String stationName,
+                       String lineName, double lat, double lon) {
         this.stationId = stationId;
         this.stationName = stationName;
         this.lineName = lineName;

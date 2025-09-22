@@ -1,7 +1,6 @@
 package com.example.pp.service;
 
 import com.example.pp.dto.LineStationsResponse;
-import com.example.pp.entity.SubwayStation;
 import com.example.pp.repository.SubwayStationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

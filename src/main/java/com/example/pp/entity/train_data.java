@@ -7,9 +7,9 @@ import lombok.NoArgsConstructor;
 import java.time.LocalTime;
 
 @Entity
-@Table(name = "train_data")
 @Getter @NoArgsConstructor
-public class TrainSchedule {
+@Table(name="train_data")
+public class train_data {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
