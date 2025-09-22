@@ -23,7 +23,6 @@ configurations {
 repositories {
     mavenCentral()
 }
-bootJar { archiveFileName.set("app.jar") }
 
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-jdbc'
@@ -46,6 +45,6 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
-tasks.named('test') {
-    useJUnitPlatform()
-}
+bootJar { archiveFileName.set("app.jar") }
+tasks.jar { enabled = false }
+tasks.bootJar { enabled = true }
