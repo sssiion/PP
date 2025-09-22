@@ -35,11 +35,11 @@ public class TagoBusStopClient {
             new ParameterizedTypeReference<>() {};
 
     public Mono<OpenApiWrap<StopItem>> nearbyStops(double lon, double lat, int radiusMeters, int numOfRows) {
-        final String servicename = "1613000/BusSttnInfoInqireService"; // 실제 경로로 교체(예: /1613000/BusSttnInfoInqireService)
+        final String servicename = "/1613000/BusSttnInfoInqireService"; // 실제 경로로 교체(예: /1613000/BusSttnInfoInqireService)
         log.info("[TAGO 정류장 요청] 위도={}, 경도={}, 반경(m)={}, 최대건수={}", lat, lon, radiusMeters, numOfRows);
         return tagoBusStopWebClient.get().uri(uri -> uri
-                        .path("/" + servicename + "/getCrdntPrxmtSttnList")
-                        .queryParam("serviceKey", serviceKey)
+                        .path( servicename + "/getCrdntPrxmtSttnList")
+                        .queryParam("serviceKey", "rUA%2FIQ7GuIQ3GK8uD%2F9BxWRIuMpc6g5%2B5ou8WDjh7UqRTnnG0cetRc3KXKV1E3kCaj5I6xEkKdJuqf09MJ0nWA%3D%3D")
                         .queryParam("_type", "json")
                         .queryParam("gpsLati", lat)
                         .queryParam("gpsLong", lon)

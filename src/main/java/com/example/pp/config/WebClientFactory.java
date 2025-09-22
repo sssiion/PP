@@ -14,7 +14,7 @@ public class WebClientFactory {
     private final String routeBase;
     private final String busLocBase;
     private final String subwayBase;
-    private final String trainBase;
+    //private final String trainBase;
     private final String seoulMetroBase;
 
     public WebClientFactory(WebClient.Builder builder,
@@ -24,11 +24,11 @@ public class WebClientFactory {
                             @Value("${tago.route.base-url}") String routeBase,
                             @Value("${tago.busloc.base-url}") String busLocBase,
                             @Value("${tago.subway.base-url}") String subwayBase,
-                            @Value("${tago.train.base-url}") String trainBase,
+                           // @Value("${tago.train.base-url}") String trainBase,
                             @Value("${seoulmetro.api.base-url}") String seoulMetroBase) {
         this.builder = builder;
         this.tourBase = tourBase; this.busStopBase = busStopBase; this.arrivalBase = arrivalBase;
-        this.routeBase = routeBase; this.busLocBase = busLocBase; this.subwayBase = subwayBase; this.trainBase = trainBase;
+        this.routeBase = routeBase; this.busLocBase = busLocBase; this.subwayBase = subwayBase; //this.trainBase = trainBase;
         this.seoulMetroBase = seoulMetroBase;
     }
 
@@ -38,6 +38,6 @@ public class WebClientFactory {
     public WebClient tagoRoute()     { return builder.clone().baseUrl(routeBase).build(); }
     public WebClient tagoBusLoc()    { return builder.clone().baseUrl(busLocBase).build(); }
     public WebClient tagoSubway()    { return builder.clone().baseUrl(subwayBase).build(); }
-    public WebClient tagoTrain()     { return builder.clone().baseUrl(trainBase).build(); }
+    //public WebClient tagoTrain()     { return builder.clone().baseUrl(trainBase).build(); }
     public WebClient seoulMetro()    { return builder.clone().baseUrl(seoulMetroBase).build(); }
 }

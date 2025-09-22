@@ -44,8 +44,7 @@ public interface SubwayStationRepository extends JpaRepository<staion_info, Stri
     ''              AS lineNo,      -- 테이블에 없으면 임시 별칭 또는 인터페이스에서 제거
     s.line_number   AS lineName,
     s.latitude      AS lat,
-    s.longitude     AS lon,
-    NULL            AS roadAddress, -- 테이블에 없으면 임시 별칭 또는 인터페이스에서 제거
+    s.longitude     AS lon
     (6371000 * 2 * ASIN(
        SQRT(
          POW(SIN(RADIANS((:lat - s.latitude) / 2)), 2) +
@@ -69,9 +68,9 @@ public interface SubwayStationRepository extends JpaRepository<staion_info, Stri
             @Param("lon") double lon,
             @Param("radiusMeters") double radiusMeters
     );
-    @Query(value = "SELECT * FROM station_info WHERE station_id = :code LIMIT 1", nativeQuery = true)
+    @Query(value = "SELECT * FROM station_info WHERE station_id = :code", nativeQuery = true)
     Optional<staion_info> findOneByStationId(@Param("code") String stationCode);
 
-    @Query(value = "SELECT * FROM station_info WHERE station_name = :name LIMIT 1", nativeQuery = true)
+    @Query(value = "SELECT * FROM station_info WHERE station_name = :name", nativeQuery = true)
     Optional<staion_info> findOneByStationName(@Param("name") String stationName);
 }

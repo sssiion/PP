@@ -9,6 +9,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.web.reactive.function.client.ExchangeFilterFunction;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.util.DefaultUriBuilderFactory;
 import reactor.core.publisher.Mono;
 import reactor.netty.http.client.HttpClient;
 import reactor.netty.transport.logging.AdvancedByteBufFormat;
@@ -26,7 +27,12 @@ public class WebClientConfig {
     @Bean(name = "tourWebClient")
     public WebClient tourWebClient(WebClient.Builder builder,
                                    @Value("${tour.api.base-url}") String baseUrl) {
-        return base(builder, baseUrl);
+        DefaultUriBuilderFactory f = new DefaultUriBuilderFactory(baseUrl);
+        // 값 중심 인코딩(템플릿은 그대로, 변수 값만 인코딩)
+        f.setEncodingMode(DefaultUriBuilderFactory.EncodingMode.VALUES_ONLY); // 대안: URI_COMPONENT
+        return builder.baseUrl(baseUrl)
+                .uriBuilderFactory(f)
+                .build();
     }
 
     @Bean(name = "tagoBusStopWebClient")

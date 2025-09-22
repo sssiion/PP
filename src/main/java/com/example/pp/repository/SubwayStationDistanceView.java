@@ -7,6 +7,7 @@ public interface SubwayStationDistanceView {
     String getLineName();
     Double getLat();
     Double getLon();
+
     String getRoadAddress();
     Double getDistance(); // meters
 }

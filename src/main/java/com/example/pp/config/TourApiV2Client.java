@@ -37,9 +37,9 @@ public class TourApiV2Client {
                 mapX, mapY, radiusMeters, pageNo, numOfRows, arrange);
         return wc.get().uri(b -> b
                         .path("/locationBasedList2")
-                        .queryParam("serviceKey", serviceKey)
+                        .queryParam("serviceKey", "rUA%2FIQ7GuIQ3GK8uD%2F9BxWRIuMpc6g5%2B5ou8WDjh7UqRTnnG0cetRc3KXKV1E3kCaj5I6xEkKdJuqf09MJ0nWA%3D%3D")
                         .queryParam("MobileOS", "WEB")
-                        .queryParam("MobileApp", mobileApp)
+                        .queryParam("MobileApp", "mobileApp")
                         .queryParam("_type", "json")
                         .queryParam("mapX", mapX)   // 경도
                         .queryParam("mapY", mapY)   // 위도
@@ -67,10 +67,10 @@ public class TourApiV2Client {
                         .queryParam("MobileOS", "WEB")
                         .queryParam("MobileApp", "mobileApp")
                         .queryParam("_type", "json")
-                        .queryParam("serviceKey", "726a7271427274613130356952534a4e") // 실제 운영 시 serviceKey로 교체
+                        .queryParam("serviceKey", "rUA%2FIQ7GuIQ3GK8uD%2F9BxWRIuMpc6g5%2B5ou8WDjh7UqRTnnG0cetRc3KXKV1E3kCaj5I6xEkKdJuqf09MJ0nWA%3D%3D") // 실제 운영 시 serviceKey로 교체
                         .queryParam("areaCode", "1")
                         .queryParam("pageNo", "1")
-                        .queryParam("numOfRows", "10000")
+                        .queryParam("numOfRows", 10000)
                         .build())
                 .retrieve()
                 .bodyToMono(TourPoiResponse.class);

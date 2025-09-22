@@ -32,14 +32,13 @@ public class SeoulMetroClient {
     }
     private static final ParameterizedTypeReference<SeoulWrap<StationByName.Item>> TYPE_BY_NAME =
             new ParameterizedTypeReference<>() {};
-    private static final ParameterizedTypeReference<SeoulWrap<TimeTableByCode.Item>> TYPE_TT =
-            new ParameterizedTypeReference<>() {};
+
 
     // 1) 역명 → 역코드/외부코드/호선 (JSON)
     public Mono<SeoulWrap<StationByName.Item>> searchByStationName(String stationName) {
         log.info("[서울메트로 요청] 역명 검색: {}", stationName);
         return wc.get()
-                .uri(b -> b.pathSegment(apiKey, "json", "SearchInfoBySubwayNameService", "1", "100", stationName).build())
+                .uri(b -> b.path("/" +apiKey+ "/json"+ "/SearchInfoBySubwayNameService"+"/1"+ "/100/"+ stationName+"/").build())
                 .retrieve()
                 .bodyToMono(TYPE_BY_NAME)
                 .doOnError(e -> log.error("[서울메트로 오류] 역명 검색 실패: {}", e.toString(), e)) // 오류 로그 [web:77]
@@ -51,21 +50,20 @@ public class SeoulMetroClient {
     }
 
     // 2) 역코드 → 시간표(요일 1/2/3, 방면 0/1)
-    public Mono<SeoulWrap<TimeTableByCode.Item>> timeTableByStationCode(String stationCode,
-                                                                        String dayType, String upDown) {
-        return wc.get()
-                .uri(b -> b.pathSegment(apiKey, "json", "SearchSTNTimeTableByIDService", "1", "500",
-                        stationCode, dayType, upDown).build())
-                .retrieve()
-                .bodyToMono(TYPE_TT);
-    }
+    //public Mono<SeoulWrap<TimeTableByCode.Item>> timeTableByStationCode(String stationCode,
+      //                                                                  String dayType, String upDown) {
+      //  return wc.get()
+      //          .uri(b -> b.pathSegment(apiKey, "json", "SearchSTNTimeTableByIDService", "1", "500",
+      //                  stationCode, dayType, upDown).build())
+      //          .retrieve()
+      //          .bodyToMono(TYPE_TT);
+   // }
 
     // 3) 노선번호/명 → 정차역 목록 (JSON) — 1~1000 페이징 지원
-    public Mono<LineStationsResponse> fetchLineStations(String lineParam, int start, int end) {
-        log.info("[서울메트로 요청] 노선 정차역: line={} start={} end={}", lineParam, start, end);
+    public Mono<LineStationsResponse> fetchLineStations(String lineParam) {
+        log.info("[서울메트로 요청] 노선 정차역: line={} start={} end={}", lineParam);
         return wc.get()
-                .uri(b -> b.pathSegment(apiKey, "json", "SearchSTNBySubwayLineInfo",
-                        String.valueOf(start), String.valueOf(end), lineParam).build())
+                .uri(b -> b.path("/" +apiKey+ "/json"+ "/SearchSTNBySubwayLineInfo"+"/1"+ "/100"+"/"+ lineParam).build())
                 .retrieve()
                 .bodyToMono(LineStationsResponse.class)
                 .doOnError(e -> log.error("[서울메트로 오류] 노선 정차역 실패: {}", e.toString(), e)) // 오류 로그 [web:77]
@@ -77,6 +75,6 @@ public class SeoulMetroClient {
     }
 
     public Mono<LineStationsResponse> fetchLineStationsMax(String lineParam) {
-        return fetchLineStations(lineParam, 1, 1000);
+        return fetchLineStations(lineParam);
     }
 }
