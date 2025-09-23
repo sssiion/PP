@@ -15,8 +15,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.SignalType;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -33,6 +35,13 @@ public class List1AllNearService {
 
     // 리스트1 전체 원본을 저장하는 간단한 메모리 저장소 (contentid 키)
     private final Map<String, TourPoiResponse.Item> store = new LinkedHashMap<>();
+    // 노선별 정차역 캐시(중복 API 방지)
+    private final Map<String, Mono<LineCtx>> lineCtxCache = new ConcurrentHashMap<>();
+
+    private String normalizeLineName(String line) {
+        if (line == null) return "";
+        return line.replaceAll("\\s+", "").trim();
+    }
 
     private record Seed(double lon, double lat) {}
     private record Coord(double lon, double lat) {}
@@ -51,26 +60,17 @@ public class List1AllNearService {
         Set<String> lines = nears.stream()
                 .map(staion_info::getLineName)
                 .filter(Objects::nonNull)
+                .map(this::normalizeLineName)
                 .collect(Collectors.toSet());
 
         // 3) 라인 전체 정차역을 1회씩만 비동기 조회 & key로 맵화
         return Flux.fromIterable(lines)
-                .flatMap(line -> seoul.fetchLineStationsMax(line)
-                        .map(stops -> {
-                            Map<String, Integer> nameToIdx = new HashMap<>();
-                            for (int i = 0; i < stops.size(); i++) {
-                                nameToIdx.putIfAbsent(normalizeName(stops.get(i).stationNameKo()), i);
-                            }
-                            return Map.entry(line, new LineCtx(stops, nameToIdx));
-                        })
-                )
+                .flatMap(line -> fetchOrCached(line)
+                        .map(ctx -> Map.entry(line, ctx)))
                 .collectMap(Map.Entry::getKey, Map.Entry::getValue)
                 .flatMap(lineCtxMap -> {
-                    // (정규화된 역명 기준) Set<String>으로 seed 역명 중복 필터
                     Set<String> nextStationsNormNames = new LinkedHashSet<>();
-                    Map<String, String> normToOrigName = new HashMap<>(); // 정규화 → 원본(정확한) 이름 치환용
-                    // 4) 한 역(=노선,역명)마다 다음 2개 역명 추출(중복 역 필터)
-                    //LinkedHashSet<String> nextStations = new LinkedHashSet<>();
+                    Map<String, String> normToOrigName = new HashMap<>();
                     for (staion_info st : nears) {
                         String line = st.getLineName();
                         String baseName = normalizeName(st.getStationName());
@@ -97,7 +97,6 @@ public class List1AllNearService {
                         log.warn("[다음역 없음] 컨텍스트 부족 또는 매칭 실패");
                         return Mono.just(List.<TourPoiResponse.Item>of());
                     }
-                    // 실제로는 seed = 좌표 쌍, 역명 중복 제거용이니 Set<String> → Seed 변환만 1회
                     List<Seed> seeds = nextStationsNormNames.stream()
                             .map(normToOrigName::get)
                             .map(this::resolveByNameFirst)
@@ -125,6 +124,30 @@ public class List1AllNearService {
                                 return list;
                             });
                 });
+
+    }
+
+    // 노선별 LineCtx 캐시 fetch (있으면 캐시에서, 없으면 API 호출 후 저장)
+    private Mono<LineCtx> fetchOrCached(String line) {
+        // computeIfAbsent 내에서 동시에 여러 호출 막기 위한 synchronized 블록 또는 synchronizedMap 활용 고려 가능
+        // 그러나 Reactor에서는 아래 패턴 권장
+        return lineCtxCache.computeIfAbsent(line, l ->
+                seoul.fetchLineStationsMax(l)
+                        .map(stops -> {
+                            Map<String, Integer> nameToIdx = new HashMap<>();
+                            for (int i = 0; i < stops.size(); i++) {
+                                nameToIdx.putIfAbsent(normalizeName(stops.get(i).stationNameKo()), i);
+                            }
+                            return new LineCtx(stops, nameToIdx);
+                        })
+                        .cache() // Mono 결과 캐싱
+                        .doFinally(signalType -> {
+                            // 실패나 완료 시 캐시에서 제거하여 이후 재시도 가능케 하기 (옵션)
+                            if (signalType == SignalType.CANCEL || signalType == SignalType.ON_ERROR) {
+                                lineCtxCache.remove(line);
+                            }
+                        })
+        );
     }
 
     // 저장된 리스트1 전체 가져오기(필요 시 사용)
