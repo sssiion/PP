@@ -22,6 +22,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+
+
 @Service
 @RequiredArgsConstructor
 public class List1AllNearService {
@@ -30,90 +32,89 @@ public class List1AllNearService {
     private static final double NEAR_RADIUS_M = 100.0;
 
     private final SubwayStationRepository stationRepo;
-    private final SeoulMetroClient seoul;  // 노선별 정차역 API 사용
-    private final TourApiV2Client tour;    // 위치기반 관광지 API 사용
+    private final SeoulMetroClient seoul;  // 노선별 정차역 API
+    private final TourApiV2Client tour;    // 위치기반 관광지 API
 
-    // 리스트1 전체 원본을 저장하는 간단한 메모리 저장소 (contentid 키)
+    // contentid → TourAPI Item
     private final Map<String, TourPoiResponse.Item> store = new LinkedHashMap<>();
-    // 노선별 정차역 캐시(중복 API 방지)
-    private final Map<String, Mono<LineCtx>> lineCtxCache = new ConcurrentHashMap<>();
-
-    private String normalizeLineName(String line) {
-        if (line == null) return "";
-        return line.replaceAll("\\s+", "").trim();
-    }
 
     private record Seed(double lon, double lat) {}
     private record Coord(double lon, double lat) {}
     private record LineCtx(List<LineStationsResponse.Row> stops, Map<String,Integer> nameToIdx) {}
 
-
-    // 빌드: List1을 “TourAPI Item 원본”으로 반환 + 저장소에 보관
-    public Mono<List<TourPoiResponse.Item>> build(double lat, double lon, int tourRadiusMeters, int pageSize) {
-        // 1) 주변 100m 내 모든 역(거리순)
+    public Mono<List<TourPoiResponse.Item>> build(double lat, double lon, int tourRadiusMeters, int pageSize, int type) {
+        // 1) 반경 100m 내 주변 역
         List<staion_info> nears = stationRepo.findAllWithinRadiusOrderByDistanceAsc(lat, lon);
         if (nears.isEmpty()) {
             log.warn("[주변 역 없음] lat={}, lon={}", lat, lon);
             return Mono.just(List.of());
         }
-        // 2) 라인명/역명 조합 정렬(Set: 라인별 1회만 요청)
+
+        // 2) 라인별 1회만 정차역 조회(원본 라인명을 키로)
         Set<String> lines = nears.stream()
                 .map(staion_info::getLineName)
                 .filter(Objects::nonNull)
-                .map(this::normalizeLineName)
                 .collect(Collectors.toSet());
 
-        // 3) 라인 전체 정차역을 1회씩만 비동기 조회 & key로 맵화
         return Flux.fromIterable(lines)
-                .flatMap(line -> fetchOrCached(line)
-                        .map(ctx -> Map.entry(line, ctx)))
+                .flatMap(line -> seoul.fetchLineStations1k(line).map(stops -> {
+                    Map<String,Integer> nameToIdx = new HashMap<>();
+                    for (int i=0;i<stops.size();i++) {
+                        nameToIdx.putIfAbsent(normalizeName(stops.get(i).stationNameKo()), i);
+                    }
+                    return Map.entry(line, new LineCtx(stops, nameToIdx));
+                }))
                 .collectMap(Map.Entry::getKey, Map.Entry::getValue)
                 .flatMap(lineCtxMap -> {
-                    Set<String> nextStationsNormNames = new LinkedHashSet<>();
-                    Map<String, String> normToOrigName = new HashMap<>();
+                    // 3) 다음 2개 역명 추출 (동일 이름 재검색 금지: 정규화된 역명 Set)
+                    LinkedHashMap<String, String> normToOrigName = new LinkedHashMap<>();
+                    LinkedHashMap<String, String> normToLine = new LinkedHashMap<>(); // 최초 라인 매핑
                     for (staion_info st : nears) {
                         String line = st.getLineName();
-                        String baseName = normalizeName(st.getStationName());
                         LineCtx ctx = lineCtxMap.get(line);
                         if (ctx == null || ctx.stops().isEmpty()) continue;
-                        Integer idx = ctx.nameToIdx().get(baseName);
+                        Integer idx = ctx.nameToIdx().get(normalizeName(st.getStationName()));
                         if (idx == null) continue;
-                        int i1 = Math.min(idx + 1, ctx.stops().size() - 1);
-                        int i2 = Math.min(idx + 2, ctx.stops().size() - 1);
+                        int i1 = Math.min(idx+1, ctx.stops().size()-1);
+                        int i2 = Math.min(idx+2, ctx.stops().size()-1);
                         String n1 = ctx.stops().get(i1).stationNameKo();
                         String n2 = ctx.stops().get(i2).stationNameKo();
-                        String n1Norm = normalizeName(n1);
-                        String n2Norm = normalizeName(n2);
-                        if (!nextStationsNormNames.contains(n1Norm)) {
-                            nextStationsNormNames.add(n1Norm);
-                            normToOrigName.put(n1Norm, n1);
-                        }
-                        if (!nextStationsNormNames.contains(n2Norm)) {
-                            nextStationsNormNames.add(n2Norm);
-                            normToOrigName.put(n2Norm, n2);
-                        }
+                        String k1 = normalizeName(n1);
+                        String k2 = normalizeName(n2);
+                        normToOrigName.putIfAbsent(k1, n1);
+                        normToOrigName.putIfAbsent(k2, n2);
+                        normToLine.putIfAbsent(k1, line);
+                        normToLine.putIfAbsent(k2, line);
                     }
-                    if (nextStationsNormNames.isEmpty()) {
+                    if (normToOrigName.isEmpty()) {
                         log.warn("[다음역 없음] 컨텍스트 부족 또는 매칭 실패");
                         return Mono.just(List.<TourPoiResponse.Item>of());
                     }
-                    List<Seed> seeds = nextStationsNormNames.stream()
-                            .map(normToOrigName::get)
-                            .map(this::resolveByNameFirst)
-                            .filter(c -> !(c.lon == 0 && c.lat == 0))
+
+                    // 4) (라인+역명) 좌표 해석 → Seed dedup(경도+위도)
+                    List<Seed> seeds = normToOrigName.entrySet().stream()
+                            .map(e -> {
+                                String name = e.getValue();
+                                String line = normToLine.getOrDefault(e.getKey(), "");
+                                return resolveByLineAndNameFirst(line, name);
+                            })
+                            .filter(c -> !(c.lon==0 && c.lat==0))
                             .map(c -> new Seed(c.lon, c.lat))
-                            .distinct()
-                            .collect(Collectors.toList());
+                            .collect(Collectors.collectingAndThen(
+                                    Collectors.toMap(s -> s.lon+","+s.lat, Function.identity(), (a,b)->a, LinkedHashMap::new),
+                                    m -> new ArrayList<>(m.values())
+                            ));
                     if (seeds.isEmpty()) return Mono.just(List.of());
+
+                    // 5) 위치기반 호출 → contentid로 dedup → dist 오름차순
                     return Flux.fromIterable(seeds)
                             .flatMap(seed ->
-                                    tour.locationBasedList2(seed.lon, seed.lat, tourRadiusMeters, 1, pageSize, "C")
+                                    tour.locationBasedList2(seed.lon, seed.lat, tourRadiusMeters, 1, pageSize, "C", type)
                                             .map(r -> Optional.ofNullable(r.response())
                                                     .map(TourPoiResponse.Resp::body)
                                                     .map(TourPoiResponse.Body::items)
                                                     .map(TourPoiResponse.Items::item)
                                                     .orElseGet(List::of))
-                                            .doOnNext(list -> log.info("[TourAPI 위치기반] seed=({}, {}) 수신={}", seed.lat, seed.lon, list.size()))
                                             .flatMapIterable(i -> i)
                             )
                             .collect(Collectors.toMap(TourPoiResponse.Item::contentid, i -> i, (a, b) -> a, LinkedHashMap::new))
@@ -124,79 +125,32 @@ public class List1AllNearService {
                                 return list;
                             });
                 });
-
     }
 
-    // 노선별 LineCtx 캐시 fetch (있으면 캐시에서, 없으면 API 호출 후 저장)
-    private Mono<LineCtx> fetchOrCached(String line) {
-        // computeIfAbsent 내에서 동시에 여러 호출 막기 위한 synchronized 블록 또는 synchronizedMap 활용 고려 가능
-        // 그러나 Reactor에서는 아래 패턴 권장
-        return lineCtxCache.computeIfAbsent(line, l ->
-                seoul.fetchLineStationsMax(l)
-                        .map(stops -> {
-                            Map<String, Integer> nameToIdx = new HashMap<>();
-                            for (int i = 0; i < stops.size(); i++) {
-                                nameToIdx.putIfAbsent(normalizeName(stops.get(i).stationNameKo()), i);
-                            }
-                            return new LineCtx(stops, nameToIdx);
-                        })
-                        .cache() // Mono 결과 캐싱
-                        .doFinally(signalType -> {
-                            // 실패나 완료 시 캐시에서 제거하여 이후 재시도 가능케 하기 (옵션)
-                            if (signalType == SignalType.CANCEL || signalType == SignalType.ON_ERROR) {
-                                lineCtxCache.remove(line);
-                            }
-                        })
-        );
-    }
-
-    // 저장된 리스트1 전체 가져오기(필요 시 사용)
-    public List<TourPoiResponse.Item> getSavedList1() {
-        return new ArrayList<>(store.values());
-    }
-
-    // contentid로 선택 제거(“사용하지 않을 것” 정리용)
-    public void removeFromSavedList1(String contentId) {
-        store.remove(contentId);
-    }
-
-    // 정차역 응답에서 기준 역명을 찾아 다음 2개 역명을 반환
-    private List<String> toNextTwoNames(LineStationsResponse resp, String baseStationName) {
-        var stops = Optional.ofNullable(resp.service())
-                .map(LineStationsResponse.ServiceBlock::rows)
-                .orElseGet(List::of);
-        if (stops.isEmpty()) return List.of();
-
-        String target = normalizeName(baseStationName);
-        int idx = -1;
-        for (int i = 0; i < stops.size(); i++) {
-            String nameKo = normalizeName(stops.get(i).stationNameKo());
-            if (target.equalsIgnoreCase(nameKo)) { idx = i; break; }
-        }
-        if (idx < 0) return List.of();
-
-        int i1 = Math.min(idx + 1, stops.size() - 1);
-        int i2 = Math.min(idx + 2, stops.size() - 1);
-        return List.of(stops.get(i1).stationNameKo(), stops.get(i2).stationNameKo());
-    }
-
-    // 역명 → 좌표(이름 우선, 정규화 보조)
-    private Coord resolveByNameFirst(String stationName) {
+    // (라인+역명)으로 단일 결과 우선 조회 → 실패 시 정규화 이름 Top1 → 실패 시 원문 이름 Top1
+    private Coord resolveByLineAndNameFirst(String lineName, String stationName) {
         String normalized = normalizeName(stationName);
-        return stationRepo.findOneByStationName(stationName)
+        return stationRepo.findTop1ByStationNameAndLineName(stationName, lineName)
+                .or(() -> stationRepo.findTop1ByStationNameNormalized(normalized))
                 .or(() -> stationRepo.findFirstByStationNameIgnoreCase(stationName))
-                .or(() -> stationRepo.findOneByStationNameNormalized(normalized))
+                .or(() -> stationRepo.findOneByStationName(stationName))
                 .map(s -> new Coord(s.getLon(), s.getLat()))
-                .orElse(new Coord(0, 0));
+                .orElse(new Coord(0,0));
     }
 
     private String normalizeName(String name) {
         if (name == null) return "";
-        return name.replace("(", " ").replace(")", " ")
-                .replaceAll("\\s+", " ").trim();
+        return name.replace("(", " ").replace(")", " ").replaceAll("\\s+", " ").trim();
     }
 
-    // TourAPI dist는 보통 문자열이므로 안전 파싱 후 정렬용 Double 반환
+    public List<TourPoiResponse.Item> getSavedList1() {
+        return new ArrayList<>(store.values());
+    }
+
+    public void removeFromSavedList1(String contentId) {
+        store.remove(contentId);
+    }
+
     private static Double safeDist(TourPoiResponse.Item i) {
         String d = i.dist();
         if (d == null) return Double.POSITIVE_INFINITY;

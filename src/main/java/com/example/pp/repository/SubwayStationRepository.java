@@ -75,4 +75,22 @@ public interface SubwayStationRepository extends JpaRepository<staion_info, Stri
     // 추가: 동일 이름 다건 대비(필요 시 사용)
     List<staion_info> findByStationNameIn(Collection<String> names);
 
+    // 추가: (라인+역명) 우선 단일 조회로 중복 예외 예방
+    @Query(value = """
+        select * from station_info
+        where station_name = :name and line_number = :line
+        limit 1
+    """, nativeQuery = true)
+    Optional<staion_info> findTop1ByStationNameAndLineName(@Param("name") String stationName,
+                                                           @Param("line") String lineName);
+    // 괄호 제거 후 Top1
+    @Query(value = """
+        select * from station_info
+        where replace(replace(station_name, '(', ''), ')', '') = :normalized
+        order by station_id
+        limit 1
+    """, nativeQuery = true)
+    Optional<staion_info> findTop1ByStationNameNormalized(@Param("normalized") String normalized);
+
+
 }

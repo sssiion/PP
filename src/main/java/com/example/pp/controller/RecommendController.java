@@ -27,12 +27,13 @@ public class RecommendController {
             @RequestParam double lat,
             @RequestParam double lon,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.TIME) LocalTime time,
-            @RequestParam(defaultValue = "8000") int radius,
-            @RequestParam(defaultValue = "200") int pageSize
+            @RequestParam(defaultValue = "5000") int radius,
+            @RequestParam(defaultValue = "2000") int pageSize,
+            @RequestParam(defaultValue= "12") int type
     ){
         // List1: 위치기반 (TourAPI 원본 아이템)
         Mono<java.util.List<com.example.pp.dto.TourPoiResponse.Item>> list1Mono =
-                list1Service.build(lat, lon, radius, pageSize);
+                list1Service.build(lat, lon, radius, pageSize, type);
 
         // List2: 지역기반 contentid (단일 페이지 전량)
         Mono<java.util.List<String>> list2IdsMono =

@@ -20,6 +20,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+
+
 @Component
 public class SeoulMetroClient {
 
@@ -57,11 +59,14 @@ public class SeoulMetroClient {
 
     public record StationSimpleDto(String stationCode, String lineNum, String stationNameKo, String outerCode) {}
 
-    // 3) 노선번호/명 → 정차역 목록 (1~1000)
+    // 단일 페이지 호출: start/end를 pathSegment로 분리해 전달
     public Mono<LineStationsResponse> fetchLineStationsPage(String lineParam) {
         log.info("[서울메트로 요청] 노선 정차역: line={}", lineParam);
         return wc.get()
-                .uri(b -> b.pathSegment(apiKey, "json", "SearchSTNBySubwayLineInfo", "5", "1000","//", lineParam).build())
+                .uri(b -> b.pathSegment(
+                        apiKey, "json", "SearchSTNBySubwayLineInfo",
+                        "1", "1000", "/",lineParam
+                ).build())
                 .retrieve()
                 .bodyToMono(LineStationsResponse.class)
                 .doOnError(e -> log.error("[서울메트로 오류] 노선 정차역 실패: {}", e.toString(), e))
@@ -73,19 +78,15 @@ public class SeoulMetroClient {
                 });
     }
 
-
     // 최대 5페이지 × 1000행 = 5000행 병합 반환 (Row 리스트)
     public Mono<List<LineStationsResponse.Row>> fetchLineStationsMax(String lineParam) {
-        // 1~1000, 1001~2000, 2001~3000, 3001~4000, 4001~5000
         int[][] ranges = new int[][]{
                 {1, 1000}, {1001, 2000}, {2001, 3000}, {3001, 4000}, {4001, 5000}
         };
         return Flux.fromArray(ranges)
-                // 순서 보장 위해 concatMap 사용
-                .concatMap(r -> fetchLineStationsPage(lineParam)) // [web:230][web:232]
+                .concatMap(r -> fetchLineStationsPage(lineParam))
                 .map(this::extractRows)
                 .reduce(new LinkedHashMap<String, LineStationsResponse.Row>(), (acc, rows) -> {
-                    // 역코드 기준 중복 제거, 최초 등장 순서 유지
                     for (var row : rows) acc.putIfAbsent(row.stationCode(), row);
                     return acc;
                 })
@@ -95,6 +96,13 @@ public class SeoulMetroClient {
     private List<LineStationsResponse.Row> extractRows(LineStationsResponse resp) {
         return Optional.ofNullable(resp.service())
                 .map(LineStationsResponse.ServiceBlock::rows)
-                .orElseGet(List::of); // [web:11]
+                .orElseGet(List::of);
+    }
+    // 1~1000 구간만 호출하여 Row 리스트 반환
+    public Mono<List<LineStationsResponse.Row>> fetchLineStations1k(String lineParam) {
+        return fetchLineStationsPage(lineParam)
+                .map(resp -> Optional.ofNullable(resp.service())
+                        .map(LineStationsResponse.ServiceBlock::rows)
+                        .orElseGet(List::of));
     }
 }
