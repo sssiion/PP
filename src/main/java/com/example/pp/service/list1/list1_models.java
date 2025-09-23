@@ -37,16 +37,18 @@ public final class list1_models {
     // 역명 접미사 보정("역"이 없으면 붙이기)
     public static String ensureStationSuffix(String name) {
         if (name == null) return "";
-        String n = name.trim();
-        return n.endsWith("역") ? n : n + "역";
+        //String n = name.trim();
+        //return n.endsWith("역") ? n : n + "역";
+        return name.replaceAll("\\([^)]*\\)", "")   // 괄호와 내부 텍스트 제거
+                .replaceAll("\\s+", " ")
+                .trim();
     }
 
     // 이름 정규화(괄호/연속공백 제거)
     public static String normalizeName(String name) {
         if (name == null) return "";
-        return name.replace("(", " ")
-                .replace(")", " ")
-                .replaceAll("\\s+", " ") // <-- 수정
+        return name.replaceAll("\\([^)]*\\)", "")   // 괄호와 내부 텍스트 제거
+                .replaceAll("\\s+", " ")
                 .trim();
     }
 
