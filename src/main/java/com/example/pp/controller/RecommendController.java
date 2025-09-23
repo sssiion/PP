@@ -1,8 +1,9 @@
 package com.example.pp.controller;
 
-import com.example.pp.service.List1AllNearService;
+import com.example.pp.dto.List1UserResponse;
 import com.example.pp.service.List2SeoulAreaService;
 import com.example.pp.service.List3BuildService;
+import com.example.pp.service.list1.list1_orchestrator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
@@ -17,7 +18,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class RecommendController {
 
-    private final List1AllNearService list1Service;     // 위치기반
+    private final list1_orchestrator list1Service;     // 위치기반
     private final List2SeoulAreaService list2Service;   // 지역기반(contentid만)
     private final List3BuildService list3Service;       // 교집합(최종)
 
@@ -41,5 +42,16 @@ public class RecommendController {
 
         // List3: 교집합
         return list3Service.buildAndStore(list1Mono, list2IdsMono, null);
+    }
+    @GetMapping("/list1-detail")
+    public Mono<List1UserResponse> list1Detail(
+            @RequestParam double lat,
+            @RequestParam double lon,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.TIME) LocalTime time,
+            @RequestParam(defaultValue = "5000") int radius,
+            @RequestParam(defaultValue = "2000") int pageSize,
+            @RequestParam(defaultValue= "12") int type
+    ){
+        return list1Service.buildResult(lat, lon, time, radius, pageSize, type);
     }
 }

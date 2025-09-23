@@ -32,4 +32,47 @@ public record LineStationsResponse(
             @JsonProperty("STATION_NM_CHN") String stationNameZh, // 西井里
             @JsonProperty("STATION_NM_JPN") String stationNameJp  // ソジョンニ
     ) {}
+    // FR_CODE 자연 정렬 + STATION_CD 숫자 정렬
+    private static final java.util.regex.Pattern P = java.util.regex.Pattern.compile("^([A-Za-z]*)(\\d+)?");
+    public static void sortRowsInPlace(List<Row> rows) {
+        rows.sort((a, b) -> {
+            SortKey ka = new SortKey(a.outerCode(), a.stationCode());
+            SortKey kb = new SortKey(b.outerCode(), b.stationCode());
+            return ka.compareTo(kb);
+        });
+    }
+    private static class SortKey implements Comparable<SortKey> {
+        final String prefix;   // FR_CODE 알파벳 접두 (없으면 빈 문자열)
+        final long num;        // FR_CODE 숫자부 (없으면 +INF 대체)
+        final long stationCd;  // STATION_CD 숫자 값 (없으면 +INF 대체)
+
+        SortKey(String frCode, String stationCd) {
+            String f = frCode == null ? "" : frCode.trim();
+            java.util.regex.Matcher m = P.matcher(f);
+            if (m.find()) {
+                this.prefix = m.group(1) == null ? "" : m.group(1);
+                String n = m.group(2);
+                this.num = (n == null || n.isEmpty()) ? Long.MAX_VALUE : Long.parseLong(n);
+            } else {
+                this.prefix = "";
+                this.num = Long.MAX_VALUE;
+            }
+            String sc = stationCd == null ? "" : stationCd.trim();
+            long sd;
+            try { sd = Long.parseLong(sc.replaceAll("\\D", "")); } // 비숫자 제거 후 파싱
+            catch (Exception e) { sd = Long.MAX_VALUE; }
+            this.stationCd = sd;
+        }
+        @Override public int compareTo(SortKey o) {
+            int c = this.prefix.compareToIgnoreCase(o.prefix);
+            if (c != 0) return c;
+            c = Long.compare(this.num, o.num);
+            if (c != 0) return c;
+            return Long.compare(this.stationCd, o.stationCd);
+        }
+        // FR_CODE(outerCode) 자연 정렬 + STATION_CD(stationCode) 숫자 정렬 유틸
+
+    }
+
+
 }

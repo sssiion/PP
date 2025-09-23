@@ -42,7 +42,7 @@ public class SeoulMetroClient {
     public Mono<List<StationSimpleDto>> searchByStationName(String stationName) {
         log.info("[서울메트로 요청] 역명 검색: {}", stationName);
         return wc.get()
-                .uri(b -> b.pathSegment(apiKey, "json", "SearchInfoBySubwayNameService", "1", "100", stationName).build())
+                .uri(b -> b.pathSegment(apiKey, "json", "SearchInfoBySubwayNameService", "1", "1000","/", stationName).build())
                 .retrieve()
                 .bodyToMono(TYPE_BY_NAME)
                 .map(w -> Optional.ofNullable(w.SearchInfoBySubwayNameService())
@@ -63,9 +63,9 @@ public class SeoulMetroClient {
     public Mono<LineStationsResponse> fetchLineStationsPage(String lineParam) {
         log.info("[서울메트로 요청] 노선 정차역: line={}", lineParam);
         return wc.get()
-                .uri(b -> b.pathSegment(
-                        apiKey, "json", "SearchSTNBySubwayLineInfo",
-                        "1", "1000", "/",lineParam
+                .uri(b -> b.path("/"+
+                        apiKey+ "/json"+ "/SearchSTNBySubwayLineInfo"+
+                        "/1"+ "/1000"+ "/%20/%20/"+lineParam
                 ).build())
                 .retrieve()
                 .bodyToMono(LineStationsResponse.class)

@@ -13,6 +13,9 @@ public class train_data {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name="line")
+    private String line;
+
     @Column(name = "station_code", nullable = false, length = 20)   // 예: "150"
     private String lineCode;
 
@@ -37,9 +40,9 @@ public class train_data {
     @Column(name = "departure_time", nullable = false)
     private LocalTime depTime;                                   // TIME
 
-    @Column(name = "arrival_name", length = 100)                    // 예: "인천"
+    @Column(name = "arrival_station", length = 100)                    // 예: "인천"
     private String destName;
 
-    @Column(name = "departure_name", length = 100)                    // 예: "양주"
+    @Column(name = "departure_station", length = 100)                    // 예: "양주"
     private String origName;
 }
