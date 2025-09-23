@@ -22,7 +22,7 @@ public class RecommendController {
     private final List3BuildService list3Service;       // 교집합(최종)
 
     // 예: /api/recommend/list3?lat=37.5557&lon=126.9730&time=13:30:00&radius=8000&pageSize=200
-    @GetMapping("/list3")
+    @GetMapping("/")
     public Mono<List<List3BuildService.List3Item>> list3(
             @RequestParam double lat,
             @RequestParam double lon,
@@ -33,7 +33,7 @@ public class RecommendController {
     ){
         // List1: 위치기반 (TourAPI 원본 아이템)
         Mono<java.util.List<com.example.pp.dto.TourPoiResponse.Item>> list1Mono =
-                list1Service.build(lat, lon, radius, pageSize, type);
+                list1Service.build(lat, lon, time, radius, pageSize, type);
 
         // List2: 지역기반 contentid (단일 페이지 전량)
         Mono<java.util.List<String>> list2IdsMono =

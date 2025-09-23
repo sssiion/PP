@@ -9,6 +9,7 @@ import com.example.pp.dto.LineStationsResponse;
 import com.example.pp.dto.TourPoiResponse;
 import com.example.pp.entity.staion_info;
 import com.example.pp.repository.SubwayStationRepository;
+import com.example.pp.repository.TrainDataRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,6 +18,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.SignalType;
 
+import java.time.LocalTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
@@ -34,6 +36,7 @@ public class List1AllNearService {
     private final SubwayStationRepository stationRepo;
     private final SeoulMetroClient seoul;  // 노선별 정차역 API
     private final TourApiV2Client tour;    // 위치기반 관광지 API
+    private final TrainDataRepository trainRepo; // 신규 주입
 
     // contentid → TourAPI Item
     private final Map<String, TourPoiResponse.Item> store = new LinkedHashMap<>();
@@ -42,54 +45,67 @@ public class List1AllNearService {
     private record Coord(double lon, double lat) {}
     private record LineCtx(List<LineStationsResponse.Row> stops, Map<String,Integer> nameToIdx) {}
 
-    public Mono<List<TourPoiResponse.Item>> build(double lat, double lon, int tourRadiusMeters, int pageSize, int type) {
-        // 1) 반경 100m 내 주변 역
+    public Mono<List<TourPoiResponse.Item>> build(double lat, double lon,  LocalTime time, int tourRadiusMeters, int pageSize, int type) {
+        // 1) 주변역
         List<staion_info> nears = stationRepo.findAllWithinRadiusOrderByDistanceAsc(lat, lon);
-        if (nears.isEmpty()) {
-            log.warn("[주변 역 없음] lat={}, lon={}", lat, lon);
-            return Mono.just(List.of());
-        }
+        if (nears.isEmpty()) return Mono.just(List.of());
 
-        // 2) 라인별 1회만 정차역 조회(원본 라인명을 키로)
-        Set<String> lines = nears.stream()
-                .map(staion_info::getLineName)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
+        // 1-1) 날짜 → dayType 매핑 (예: 평일=DAY, 토=SAT, 일=SUN)
+        String dayType = mapDayType(java.time.LocalDate.now().getDayOfWeek());
 
-        return Flux.fromIterable(lines)
+        // 1-2) 시간창 정의(±15분). 자정 경계면 두 구간으로 나눠 검사.
+        LocalTime start = time.minusMinutes(15);
+        LocalTime end   = time.plusMinutes(15);
+
+        // 1-3) 시간표 기반 필터링
+        List<staion_info> filtered = nears.stream()
+                .filter(st -> existsTrainAround(st, dayType, start, end))
+                .toList();
+        if (filtered.isEmpty()) return Mono.just(List.of());
+
+        // 2) 필터된 라인만 정차역 조회
+        java.util.Set<String> lines = filtered.stream()
+                .map(staion_info::getLineName).filter(java.util.Objects::nonNull).collect(java.util.stream.Collectors.toSet());
+
+        return reactor.core.publisher.Flux.fromIterable(lines)
                 .flatMap(line -> seoul.fetchLineStations1k(line).map(stops -> {
-                    Map<String,Integer> nameToIdx = new HashMap<>();
-                    for (int i=0;i<stops.size();i++) {
-                        nameToIdx.putIfAbsent(normalizeName(stops.get(i).stationNameKo()), i);
-                    }
-                    return Map.entry(line, new LineCtx(stops, nameToIdx));
+                    java.util.Map<String,Integer> nameToIdx = new java.util.HashMap<>();
+                    for (int i=0;i<stops.size();i++) nameToIdx.putIfAbsent(normalizeName(stops.get(i).stationNameKo()), i);
+                    return java.util.Map.entry(line, new LineCtx(stops, nameToIdx));
                 }))
-                .collectMap(Map.Entry::getKey, Map.Entry::getValue)
+                .collectMap(java.util.Map.Entry::getKey, java.util.Map.Entry::getValue)
                 .flatMap(lineCtxMap -> {
-                    // 3) 다음 2개 역명 추출 (동일 이름 재검색 금지: 정규화된 역명 Set)
-                    LinkedHashMap<String, String> normToOrigName = new LinkedHashMap<>();
-                    LinkedHashMap<String, String> normToLine = new LinkedHashMap<>(); // 최초 라인 매핑
-                    for (staion_info st : nears) {
+                    // 3) 진행 방향 고려하여 인접 2역 선택
+                    java.util.LinkedHashMap<String, String> normToOrigName = new java.util.LinkedHashMap<>();
+                    java.util.LinkedHashMap<String, String> normToLine = new java.util.LinkedHashMap<>();
+
+                    for (staion_info st : filtered) {
                         String line = st.getLineName();
                         LineCtx ctx = lineCtxMap.get(line);
                         if (ctx == null || ctx.stops().isEmpty()) continue;
+
                         Integer idx = ctx.nameToIdx().get(normalizeName(st.getStationName()));
                         if (idx == null) continue;
-                        int i1 = Math.min(idx+1, ctx.stops().size()-1);
-                        int i2 = Math.min(idx+2, ctx.stops().size()-1);
+
+                        // 방향 조회(없으면 기본 DOWN 가정)
+                        String dir = findDirection(st, dayType, time).orElse("DOWN");
+
+                        int i1 = dir.equalsIgnoreCase("UP") ? Math.max(idx-1, 0) : Math.min(idx+1, ctx.stops().size()-1);
+                        int i2 = dir.equalsIgnoreCase("UP") ? Math.max(idx-2, 0) : Math.min(idx+2, ctx.stops().size()-1);
+
                         String n1 = ctx.stops().get(i1).stationNameKo();
                         String n2 = ctx.stops().get(i2).stationNameKo();
                         String k1 = normalizeName(n1);
                         String k2 = normalizeName(n2);
+
                         normToOrigName.putIfAbsent(k1, n1);
                         normToOrigName.putIfAbsent(k2, n2);
                         normToLine.putIfAbsent(k1, line);
                         normToLine.putIfAbsent(k2, line);
                     }
-                    if (normToOrigName.isEmpty()) {
-                        log.warn("[다음역 없음] 컨텍스트 부족 또는 매칭 실패");
-                        return Mono.just(List.<TourPoiResponse.Item>of());
-                    }
+                    if (normToOrigName.isEmpty()) return Mono.just(java.util.List.<TourPoiResponse.Item>of());
+
+                    // 4) 좌표 해석 → Seed dedup → 관광지 수집(기존 로직 재사용)
 
                     // 4) (라인+역명) 좌표 해석 → Seed dedup(경도+위도)
                     List<Seed> seeds = normToOrigName.entrySet().stream()
@@ -138,10 +154,7 @@ public class List1AllNearService {
                 .orElse(new Coord(0,0));
     }
 
-    private String normalizeName(String name) {
-        if (name == null) return "";
-        return name.replace("(", " ").replace(")", " ").replaceAll("\\s+", " ").trim();
-    }
+
 
     public List<TourPoiResponse.Item> getSavedList1() {
         return new ArrayList<>(store.values());
@@ -156,5 +169,37 @@ public class List1AllNearService {
         if (d == null) return Double.POSITIVE_INFINITY;
         try { return Double.parseDouble(d); }
         catch (Exception e) { return Double.POSITIVE_INFINITY; }
+    }
+    private boolean existsTrainAround(staion_info st, String dayType, LocalTime start, LocalTime end) {
+        // 자정 경계 분기
+        if (start.isAfter(end)) {
+            // [start, 23:59:59] OR [00:00:00, end]
+            return trainRepo.existsByLineCodeAndStationNameAndDayTypeAndArrTimeBetween(
+                    st.getStationId(), st.getStationName(), dayType, start, LocalTime.MAX)
+                    || trainRepo.existsByLineCodeAndStationNameAndDayTypeAndArrTimeBetween(
+                    st.getStationId(), st.getStationName(), dayType, LocalTime.MIN, end);
+        }
+        return trainRepo.existsByLineCodeAndStationNameAndDayTypeAndArrTimeBetween(
+                st.getStationId(), st.getStationName(), dayType, start, end);
+    }
+
+    private java.util.Optional<String> findDirection(staion_info st, String dayType, LocalTime time) {
+        return trainRepo.findTop1ByLineCodeAndStationNameAndDayTypeAndArrTimeGreaterThanEqualOrderByArrTimeAsc(
+                        st.getStationId(), st.getStationName(), dayType, time)
+                .map(com.example.pp.entity.train_data::getDirection);
+    }
+
+    private String mapDayType(java.time.DayOfWeek dow) {
+        // 예시: 평일(DAY) / 토(SAT) / 일(SUN)
+        return switch (dow) {
+            case SATURDAY -> "SAT";
+            case SUNDAY -> "SUN";
+            default -> "DAY";
+        };
+    }
+
+    private String normalizeName(String name) {
+        if (name == null) return "";
+        return name.replace("(", " ").replace(")", " ").replaceAll("\\s+", " ").trim();
     }
 }
