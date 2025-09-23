@@ -46,7 +46,7 @@ public class TourApiV2Client {
                         .queryParam("radius", radiusMeters)
                         .queryParam("pageNo", pageNo==null?1:pageNo)
                         .queryParam("numOfRows", numOfRows==null?10000:numOfRows)
-                        .queryParam("arrange", arrange==null?"C":arrange) // C=수정일순
+                        .queryParam("arrange", arrange==null?"E":arrange) // C=수정일순
                         .queryParam("contentTypeId", type)
                         .build())
                 .retrieve()
