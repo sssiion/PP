@@ -18,7 +18,7 @@ public class list1_tour_fetch {
     public list1_tour_fetch(TourApiV2Client tour) { this.tour = tour; }
 
     // Seed 좌표로 관광지 조회 → contentid dedup → 거리(dist) 오름차순
-    public Mono<List<TourPoiResponse.Item>> fetch(List<list1_models.Seed> seeds, int radius, int pageSize, int type) {
+    public Mono<List<TourPoiResponse.Item>> fetch(List<list1_models.Seed> seeds, int radius, int pageSize, String type) {
         return Flux.fromIterable(seeds)
                 .flatMap(s -> tour.locationBasedList2(s.lon(), s.lat(), radius, 1, pageSize, "C", type)
                         .map(r -> Optional.ofNullable(r.response())

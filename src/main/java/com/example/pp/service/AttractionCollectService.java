@@ -23,7 +23,7 @@ public class AttractionCollectService {
     public Mono<List<Attraction>> collectFromTwoStations(double lon1, double lat1,
                                                          double lon2, double lat2,
                                                          int radiusMeters,
-                                                        int type) {
+                                                        String type) {
         List<Seed> seeds = List.of(new Seed(lon1, lat1), new Seed(lon2, lat2));
 
         return Flux.fromIterable(seeds)

@@ -34,7 +34,7 @@ public class RecommendController {
     ){
         // List1: 위치기반 (TourAPI 원본 아이템)
         Mono<java.util.List<com.example.pp.dto.TourPoiResponse.Item>> list1Mono =
-                list1Service.build(lat, lon, time, radius, pageSize, type);
+                list1Service.build(lat, lon, time, radius, pageSize, String.valueOf(type));
 
         // List2: 지역기반 contentid (단일 페이지 전량)
         Mono<java.util.List<String>> list2IdsMono =
@@ -52,6 +52,6 @@ public class RecommendController {
             @RequestParam(defaultValue = "2000") int pageSize,
             @RequestParam(defaultValue= "12") int type
     ){
-        return list1Service.buildResult(lat, lon, time, radius, pageSize, type);
+        return list1Service.buildResult(lat, lon, time, radius, pageSize, String.valueOf(type));
     }
 }

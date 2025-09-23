@@ -32,7 +32,7 @@ public class TourApiV2Client {
 
 
     public Mono<TourPoiResponse> locationBasedList2(double mapX, double mapY, int radiusMeters,
-                                                    Integer pageNo, Integer numOfRows, String arrange, int type) {
+                                                    Integer pageNo, Integer numOfRows, String arrange, String type) {
         log.info("[TourAPI 요청] 위치기반: 경도(X)={}, 위도(Y)={}, 반경(m)={}, 페이지={}, 행수={}, 정렬={}",
                 mapX, mapY, radiusMeters, pageNo, numOfRows, arrange);
         return wc.get().uri(b -> b

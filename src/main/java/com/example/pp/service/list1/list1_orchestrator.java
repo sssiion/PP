@@ -45,7 +45,7 @@ public class list1_orchestrator {
     }
 
     public Mono<List<TourPoiResponse.Item>> build(double lat, double lon, LocalTime time,
-                                                  int tourRadiusMeters, int pageSize, int type) {
+                                                  int tourRadiusMeters, int pageSize, String type) {
         final long t0 = System.nanoTime();
         return Mono.defer(() -> {
             // 1) 주변역
@@ -114,7 +114,7 @@ public class list1_orchestrator {
     }
     // list1_orchestrator 내부에 추가
     public reactor.core.publisher.Mono<com.example.pp.dto.List1UserResponse> buildResult(
-            double lat, double lon, java.time.LocalTime time, int tourRadiusMeters, int pageSize, int type
+            double lat, double lon, java.time.LocalTime time, int tourRadiusMeters, int pageSize, String type
     ) {
         final long t0 = System.nanoTime();
         return reactor.core.publisher.Mono.defer(() -> {
