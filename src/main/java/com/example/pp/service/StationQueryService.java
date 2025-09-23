@@ -19,8 +19,5 @@ public class StationQueryService {
         return repo.findAllWithinRadiusOrderByDistanceAsc(lat, lon);
     }
 
-    // 거리 포함 프로젝션(반경 50m 고정)
-    public List<SubwayStationDistanceView> within50mWithDistance(double lat, double lon) {
-        return repo.findAllWithinRadiusWithDistanceOrderByDistanceAsc(lat, lon, FIXED_RADIUS_M);
-    }
+ 
 }
