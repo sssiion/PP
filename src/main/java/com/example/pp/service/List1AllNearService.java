@@ -47,58 +47,65 @@ public class List1AllNearService {
             log.warn("[주변 역 없음] lat={}, lon={}", lat, lon);
             return Mono.just(List.of());
         }
-        // 2) 라인별로 묶어 라인당 1회만 정차역 조회(5페이지×1000행 병합 반환)
-        Map<String, List<staion_info>> byLine = nears.stream()
-                .filter(s -> s.getLineName() != null)
-                .collect(Collectors.groupingBy(staion_info::getLineName));
+        // 2) 라인명/역명 조합 정렬(Set: 라인별 1회만 요청)
+        Set<String> lines = nears.stream()
+                .map(staion_info::getLineName)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
 
-        // 2) 각 역의 노선 정차역 전체 조회 → 기준 역명 인덱스 → +1, +2 역명
-        return Flux.fromIterable(byLine.keySet())
-                .flatMap(line -> seoul.fetchLineStationsMax(line) // Mono<List<Row>>
+        // 3) 라인 전체 정차역을 1회씩만 비동기 조회 & key로 맵화
+        return Flux.fromIterable(lines)
+                .flatMap(line -> seoul.fetchLineStationsMax(line)
                         .map(stops -> {
-                            Map<String,Integer> nameToIdx = new HashMap<>();
+                            Map<String, Integer> nameToIdx = new HashMap<>();
                             for (int i = 0; i < stops.size(); i++) {
                                 nameToIdx.putIfAbsent(normalizeName(stops.get(i).stationNameKo()), i);
                             }
                             return Map.entry(line, new LineCtx(stops, nameToIdx));
                         })
-                        .doOnError(e -> log.error("[정차역 조회 실패] line={}, err={}", line, e.toString()))
-                        .onErrorReturn(Map.entry(line, new LineCtx(List.of(), Map.of())))
                 )
                 .collectMap(Map.Entry::getKey, Map.Entry::getValue)
                 .flatMap(lineCtxMap -> {
-                    // 3) 각 근처역에 대해 “다음 2역” 이름을 추출(배열 순서 사용)
-                    Set<String> nextNames = new LinkedHashSet<>();
+                    // (정규화된 역명 기준) Set<String>으로 seed 역명 중복 필터
+                    Set<String> nextStationsNormNames = new LinkedHashSet<>();
+                    Map<String, String> normToOrigName = new HashMap<>(); // 정규화 → 원본(정확한) 이름 치환용
+                    // 4) 한 역(=노선,역명)마다 다음 2개 역명 추출(중복 역 필터)
+                    //LinkedHashSet<String> nextStations = new LinkedHashSet<>();
                     for (staion_info st : nears) {
-                        LineCtx ctx = lineCtxMap.get(st.getLineName());
+                        String line = st.getLineName();
+                        String baseName = normalizeName(st.getStationName());
+                        LineCtx ctx = lineCtxMap.get(line);
                         if (ctx == null || ctx.stops().isEmpty()) continue;
-                        Integer idx = ctx.nameToIdx().get(normalizeName(st.getStationName()));
+                        Integer idx = ctx.nameToIdx().get(baseName);
                         if (idx == null) continue;
                         int i1 = Math.min(idx + 1, ctx.stops().size() - 1);
                         int i2 = Math.min(idx + 2, ctx.stops().size() - 1);
-                        nextNames.add(ctx.stops().get(i1).stationNameKo());
-                        nextNames.add(ctx.stops().get(i2).stationNameKo());
+                        String n1 = ctx.stops().get(i1).stationNameKo();
+                        String n2 = ctx.stops().get(i2).stationNameKo();
+                        String n1Norm = normalizeName(n1);
+                        String n2Norm = normalizeName(n2);
+                        if (!nextStationsNormNames.contains(n1Norm)) {
+                            nextStationsNormNames.add(n1Norm);
+                            normToOrigName.put(n1Norm, n1);
+                        }
+                        if (!nextStationsNormNames.contains(n2Norm)) {
+                            nextStationsNormNames.add(n2Norm);
+                            normToOrigName.put(n2Norm, n2);
+                        }
                     }
-                    if (nextNames.isEmpty()) {
+                    if (nextStationsNormNames.isEmpty()) {
                         log.warn("[다음역 없음] 컨텍스트 부족 또는 매칭 실패");
                         return Mono.just(List.<TourPoiResponse.Item>of());
                     }
-
-                    // 4) 역명 → 좌표 해석(이름 우선) → seed 좌표 집합
-                    List<Seed> seeds = nextNames.stream()
+                    // 실제로는 seed = 좌표 쌍, 역명 중복 제거용이니 Set<String> → Seed 변환만 1회
+                    List<Seed> seeds = nextStationsNormNames.stream()
+                            .map(normToOrigName::get)
                             .map(this::resolveByNameFirst)
                             .filter(c -> !(c.lon == 0 && c.lat == 0))
                             .map(c -> new Seed(c.lon, c.lat))
-                            .collect(Collectors.collectingAndThen(
-                                    Collectors.toMap(s -> s.lon + "," + s.lat, Function.identity(), (a, b)->a, LinkedHashMap::new),
-                                    m -> new ArrayList<>(m.values())
-                            ));
-                    if (seeds.isEmpty()) {
-                        log.warn("[시드 좌표 없음] TourAPI 호출 생략");
-                        return Mono.just(List.<TourPoiResponse.Item>of());
-                    }
-
-                    // 5) 좌표별 TourAPI 위치기반 호출 → contentid 중복 제거 → dist 오름차순
+                            .distinct()
+                            .collect(Collectors.toList());
+                    if (seeds.isEmpty()) return Mono.just(List.of());
                     return Flux.fromIterable(seeds)
                             .flatMap(seed ->
                                     tour.locationBasedList2(seed.lon, seed.lat, tourRadiusMeters, 1, pageSize, "C")
@@ -107,8 +114,7 @@ public class List1AllNearService {
                                                     .map(TourPoiResponse.Body::items)
                                                     .map(TourPoiResponse.Items::item)
                                                     .orElseGet(List::of))
-                                            .doOnNext(list -> log.info("[TourAPI 위치기반] seed=({}, {}) 수신={}",
-                                                    seed.lat, seed.lon, list.size()))
+                                            .doOnNext(list -> log.info("[TourAPI 위치기반] seed=({}, {}) 수신={}", seed.lat, seed.lon, list.size()))
                                             .flatMapIterable(i -> i)
                             )
                             .collect(Collectors.toMap(TourPoiResponse.Item::contentid, i -> i, (a, b) -> a, LinkedHashMap::new))
