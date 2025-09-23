@@ -22,11 +22,12 @@ public class AttractionCollectService {
     // 두 역 좌표로 수집 → contentId 중복 제거 → 거리 기준 정렬 → 메모리 저장/반환
     public Mono<List<Attraction>> collectFromTwoStations(double lon1, double lat1,
                                                          double lon2, double lat2,
-                                                         int radiusMeters) {
+                                                         int radiusMeters,
+                                                        int type) {
         List<Seed> seeds = List.of(new Seed(lon1, lat1), new Seed(lon2, lat2));
 
         return Flux.fromIterable(seeds)
-                .flatMap(s -> tour.locationBasedList2(s.lon, s.lat, radiusMeters, 1, 200, "C"))
+                .flatMap(s -> tour.locationBasedList2(s.lon, s.lat, radiusMeters, 1, 200, "C", type))
                 .map(resp -> Optional.ofNullable(resp.response())
                         .map(TourPoiResponse.Resp::body)
                         .map(TourPoiResponse.Body::items)

@@ -12,10 +12,15 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
+
 
 @Component
 public class SeoulMetroClient {
@@ -23,58 +28,81 @@ public class SeoulMetroClient {
     private final WebClient wc;
     private final String apiKey;
     private static final Logger log = LoggerFactory.getLogger(SeoulMetroClient.class);
-    public SeoulMetroClient(
-            @Qualifier("seoulMetroWebClient") WebClient wc,
-            @Value("${seoulmetro.api.key}") String apiKey
-    ) {
+
+    public SeoulMetroClient(@Qualifier("seoulMetroWebClient") WebClient wc,
+                            @Value("${seoulmetro.api.key}") String apiKey) {
         this.wc = wc;
         this.apiKey = apiKey;
     }
+
     private static final ParameterizedTypeReference<SeoulWrap<StationByName.Item>> TYPE_BY_NAME =
             new ParameterizedTypeReference<>() {};
 
-
-    // 1) 역명 → 역코드/외부코드/호선 (JSON)
-    public Mono<SeoulWrap<StationByName.Item>> searchByStationName(String stationName) {
+    // 1) 역명 → DTO 리스트
+    public Mono<List<StationSimpleDto>> searchByStationName(String stationName) {
         log.info("[서울메트로 요청] 역명 검색: {}", stationName);
         return wc.get()
-                .uri(b -> b.path("/" +apiKey+ "/json"+ "/SearchInfoBySubwayNameService"+"/1"+ "/100/"+ stationName+"/").build())
+                .uri(b -> b.pathSegment(apiKey, "json", "SearchInfoBySubwayNameService", "1", "100", stationName).build())
                 .retrieve()
                 .bodyToMono(TYPE_BY_NAME)
-                .doOnError(e -> log.error("[서울메트로 오류] 역명 검색 실패: {}", e.toString(), e)) // 오류 로그 [web:77]
-                .doOnSuccess(w -> {
-                    int rows = Optional.ofNullable(w.SearchInfoBySubwayNameService())
-                            .map(SeoulWrap.Result::row).map(List::size).orElse(0);
-                    log.info("[서울메트로 응답] 역명 검색 결과 행 수={}", rows); // 결과 로그 [web:26]
-                });
+                .map(w -> Optional.ofNullable(w.SearchInfoBySubwayNameService())
+                        .map(SeoulWrap.Result::row)
+                        .orElseGet(List::of))
+                .map(rows -> rows.stream()
+                        .map(r -> new StationSimpleDto(
+                                r.stationCode(), r.lineNum(), r.stationName(), r.outerCode()
+                        ))
+                        .collect(Collectors.toList()))
+                .doOnError(e -> log.error("[서울메트로 오류] 역명 검색 실패(simple): {}", e.toString(), e))
+                .doOnSuccess(list -> log.info("[서울메트로 응답] simple 행 수={}", list.size()));
     }
 
-    // 2) 역코드 → 시간표(요일 1/2/3, 방면 0/1)
-    //public Mono<SeoulWrap<TimeTableByCode.Item>> timeTableByStationCode(String stationCode,
-      //                                                                  String dayType, String upDown) {
-      //  return wc.get()
-      //          .uri(b -> b.pathSegment(apiKey, "json", "SearchSTNTimeTableByIDService", "1", "500",
-      //                  stationCode, dayType, upDown).build())
-      //          .retrieve()
-      //          .bodyToMono(TYPE_TT);
-   // }
+    public record StationSimpleDto(String stationCode, String lineNum, String stationNameKo, String outerCode) {}
 
-    // 3) 노선번호/명 → 정차역 목록 (JSON) — 1~1000 페이징 지원
-    public Mono<LineStationsResponse> fetchLineStations(String lineParam) {
-        log.info("[서울메트로 요청] 노선 정차역: line={} start={} end={}", lineParam);
+    // 단일 페이지 호출: start/end를 pathSegment로 분리해 전달
+    public Mono<LineStationsResponse> fetchLineStationsPage(String lineParam) {
+        log.info("[서울메트로 요청] 노선 정차역: line={}", lineParam);
         return wc.get()
-                .uri(b -> b.path("/" +apiKey+ "/json"+ "/SearchSTNBySubwayLineInfo"+"/1"+ "/100"+"/"+ lineParam).build())
+                .uri(b -> b.pathSegment(
+                        apiKey, "json", "SearchSTNBySubwayLineInfo",
+                        "1", "1000", "/",lineParam
+                ).build())
                 .retrieve()
                 .bodyToMono(LineStationsResponse.class)
-                .doOnError(e -> log.error("[서울메트로 오류] 노선 정차역 실패: {}", e.toString(), e)) // 오류 로그 [web:77]
+                .doOnError(e -> log.error("[서울메트로 오류] 노선 정차역 실패: {}", e.toString(), e))
                 .doOnSuccess(r -> {
-                    int rows = Optional.ofNullable(r.service()).map(LineStationsResponse.ServiceBlock::rows)
+                    int rows = Optional.ofNullable(r.service())
+                            .map(LineStationsResponse.ServiceBlock::rows)
                             .map(List::size).orElse(0);
-                    log.info("[서울메트로 응답] 노선 정차역 행 수={}", rows); // 결과 로그 [web:21]
+                    log.info("[서울메트로 응답] 노선 정차역 행 수={}", rows);
                 });
     }
 
-    public Mono<LineStationsResponse> fetchLineStationsMax(String lineParam) {
-        return fetchLineStations(lineParam);
+    // 최대 5페이지 × 1000행 = 5000행 병합 반환 (Row 리스트)
+    public Mono<List<LineStationsResponse.Row>> fetchLineStationsMax(String lineParam) {
+        int[][] ranges = new int[][]{
+                {1, 1000}, {1001, 2000}, {2001, 3000}, {3001, 4000}, {4001, 5000}
+        };
+        return Flux.fromArray(ranges)
+                .concatMap(r -> fetchLineStationsPage(lineParam))
+                .map(this::extractRows)
+                .reduce(new LinkedHashMap<String, LineStationsResponse.Row>(), (acc, rows) -> {
+                    for (var row : rows) acc.putIfAbsent(row.stationCode(), row);
+                    return acc;
+                })
+                .map(m -> new ArrayList<>(m.values()));
+    }
+
+    private List<LineStationsResponse.Row> extractRows(LineStationsResponse resp) {
+        return Optional.ofNullable(resp.service())
+                .map(LineStationsResponse.ServiceBlock::rows)
+                .orElseGet(List::of);
+    }
+    // 1~1000 구간만 호출하여 Row 리스트 반환
+    public Mono<List<LineStationsResponse.Row>> fetchLineStations1k(String lineParam) {
+        return fetchLineStationsPage(lineParam)
+                .map(resp -> Optional.ofNullable(resp.service())
+                        .map(LineStationsResponse.ServiceBlock::rows)
+                        .orElseGet(List::of));
     }
 }
