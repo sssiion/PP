@@ -3,7 +3,9 @@ package com.example.pp.service.list1;
 
 import com.example.pp.dto.List1UserResponse;
 import com.example.pp.dto.TourPoiResponse;
+import com.example.pp.entity.BusStop;
 import com.example.pp.entity.staion_info;
+import com.example.pp.repository.BusStopRepository;
 import com.example.pp.repository.SubwayStationRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,7 +15,7 @@ import reactor.core.publisher.Mono;
 
 import java.time.LocalTime;
 import java.util.*;
-
+import java.util.stream.Collectors;
 
 
 @Service
@@ -27,6 +29,7 @@ public class list1_orchestrator {
     private final list1_resolve_seeds resolver;
     private final list1_tour_fetch tourFetch;
     private final list1_runtime_buffer buffer;
+    private final BusStopRepository busStopRepository;
 
     public list1_orchestrator(
             list1_nearby_stations nearby,
@@ -34,7 +37,7 @@ public class list1_orchestrator {
             list1_line_contexts lineCtxs,
             SubwayStationRepository stationRepo,
             com.example.pp.config.TourApiV2Client tourClient,
-            list1_runtime_buffer buffer
+            list1_runtime_buffer buffer, BusStopRepository busStopRepository
     ) {
         this.nearby = nearby;
         this.findLines = findLines;
@@ -42,6 +45,7 @@ public class list1_orchestrator {
         this.resolver = new list1_resolve_seeds(stationRepo);
         this.tourFetch = new list1_tour_fetch(tourClient);
         this.buffer = buffer;
+        this.busStopRepository = busStopRepository;
     }
 
     public Mono<List<TourPoiResponse.Item>> build(double lat, double lon, LocalTime time,
@@ -73,15 +77,17 @@ public class list1_orchestrator {
 
                                     // 5) 다음/다다음역
                                     var pair = list1_next_stations.pick(found, lineCtxMap);
-                                    java.util.Map<String,String> normToOrig = pair.getKey();
-                                    java.util.Map<String,String> normToLine = pair.getValue();
+                                    java.util.Map<String, String> normToOrig = pair.getKey();
+                                    java.util.Map<String, String> normToLine = pair.getValue();
                                     buffer.setNextStations(normToOrig, normToLine); // 보관
-                                    if (normToOrig.isEmpty()) return Mono.<List<TourPoiResponse.Item>>just(java.util.Collections.emptyList());
+                                    if (normToOrig.isEmpty())
+                                        return Mono.<List<TourPoiResponse.Item>>just(java.util.Collections.emptyList());
 
                                     // 6) 좌표 시드
                                     java.util.List<list1_models.Seed> seeds = resolver.resolve(normToOrig, normToLine);
                                     buffer.setSeeds(seeds); // 보관
-                                    if (seeds.isEmpty()) return Mono.<List<TourPoiResponse.Item>>just(java.util.Collections.emptyList());
+                                    if (seeds.isEmpty())
+                                        return Mono.<List<TourPoiResponse.Item>>just(java.util.Collections.emptyList());
 
                                     // 7) 관광지 조회
                                     return tourFetch.fetch(seeds, tourRadiusMeters, pageSize, type)
@@ -114,7 +120,9 @@ public class list1_orchestrator {
     }
     // list1_orchestrator 내부에 추가
     public reactor.core.publisher.Mono<com.example.pp.dto.List1UserResponse> buildResult(
-            double lat, double lon, java.time.LocalTime time, int tourRadiusMeters, int pageSize, String type
+            double lat, double lon, java.time.LocalTime time,
+            int stopSearchRadiusMeters, // [추가] 버스 정류장 검색 반경 파라미터
+            int tourRadiusMeters, int pageSize, String type
     ) {
         final long t0 = System.nanoTime();
         return reactor.core.publisher.Mono.defer(() -> {
@@ -200,6 +208,22 @@ public class list1_orchestrator {
                                         if (lon2 != 0d || lat2 != 0d) seeds.add(new com.example.pp.service.list1.list1_models.Seed(lon2, lat2));
                                     }
 
+                                    // [추가] 현재 위치 기반 주변 버스 정류장 조회 및 Seed 리스트에 추가
+                                    log.info("사용자 위치 ({}, {}) 근처 {}m 내 버스 정류장 조회를 시작합니다.", lat, lon, stopSearchRadiusMeters);
+                                    List<BusStop> nearbyBusStops = busStopRepository.findBusStopsWithinRadius(lat, lon, stopSearchRadiusMeters);
+                                    log.info("총 {}개의 주변 버스 정류장을 찾았습니다. 관광지 검색 시드에 추가합니다.", nearbyBusStops.size());
+
+                                    nearbyBusStops.forEach(stop ->
+                                            seeds.add(new com.example.pp.service.list1.list1_models.Seed(stop.getLongitude(), stop.getLatitude()))
+                                    );
+
+                                    // [추가] 지하철 + 버스 Seed 리스트에서 중복된 좌표를 제거
+                                    List<list1_models.Seed> distinctSeeds = seeds.stream()
+                                            .distinct()
+                                            .collect(Collectors.toList());
+
+
+                                    buffer.setSeeds(distinctSeeds);
                                     // 다음/다다음역 이름/라인을 버퍼에도 보관(디버깅/재사용)
                                     java.util.Map<String,String> nameMap = new java.util.LinkedHashMap<>();
                                     java.util.Map<String,String> lineMap = new java.util.LinkedHashMap<>();
@@ -213,12 +237,12 @@ public class list1_orchestrator {
                                     buffer.setSeeds(seeds);
 
                                     // 6) 관광지 조회(필요 시 호출, 아니면 빈 리스트)
-                                    if (seeds.isEmpty()) {
+                                    if (distinctSeeds.isEmpty()) {
                                         return reactor.core.publisher.Mono.just(
                                                 new com.example.pp.dto.List1UserResponse(start, end, dayType, picks, java.util.List.of())
                                         );
                                     }
-                                    return tourFetch.fetch(seeds, tourRadiusMeters, pageSize, type)
+                                    return tourFetch.fetch(distinctSeeds, tourRadiusMeters, pageSize, type)
                                             .defaultIfEmpty(java.util.List.of())
                                             .map(items -> {
                                                 // 버퍼에도 저장(한번 쓰고 버리는 용도)
