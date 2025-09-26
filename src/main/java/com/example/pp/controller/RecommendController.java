@@ -52,6 +52,6 @@ public class RecommendController {
             @RequestParam(defaultValue = "2000") int pageSize,
             @RequestParam(defaultValue= "12") int type
     ){
-        return list1Service.buildResult(lat, lon, time, radius, pageSize, 500, String.valueOf(type));
+        return list1Service.buildResult(lat, lon, time, radius, pageSize, String.valueOf(type)); //500
     }
 }
