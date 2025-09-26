@@ -11,6 +11,8 @@ import com.example.pp.repository.BusTimetableRepository;
 import com.example.pp.repository.RouteSequenceRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
@@ -26,6 +28,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class DataInitializer implements CommandLineRunner {
 
+    private static final Logger log = LoggerFactory.getLogger(DataInitializer.class);
+
     private final BusRouteRepository busRouteRepository;
     private final BusStopRepository busStopRepository;
     private final RouteSequenceRepository routeSequenceRepository;
@@ -34,6 +38,10 @@ public class DataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) throws Exception {
+        if (busStopRepository.count() > 0) {
+            log.info("버스 데이터가 이미 존재하므로 데이터 초기화를 건너뜁니다.");
+            return; // 데이터가 있으면 메서드를 즉시 종료
+        }
 
         // --- 1. 버스 정류장(BusStop) 데이터 저장 ---
         List<BusStop> busStops = Arrays.asList(
