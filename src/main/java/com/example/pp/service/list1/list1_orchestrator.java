@@ -223,7 +223,7 @@ public class list1_orchestrator {
                                             .collect(Collectors.toList());
 
 
-                                    buffer.setSeeds(distinctSeeds);
+                                    //buffer.setSeeds(distinctSeeds);
                                     // 다음/다다음역 이름/라인을 버퍼에도 보관(디버깅/재사용)
                                     java.util.Map<String,String> nameMap = new java.util.LinkedHashMap<>();
                                     java.util.Map<String,String> lineMap = new java.util.LinkedHashMap<>();
@@ -237,12 +237,12 @@ public class list1_orchestrator {
                                     buffer.setSeeds(seeds);
 
                                     // 6) 관광지 조회(필요 시 호출, 아니면 빈 리스트)
-                                    if (distinctSeeds.isEmpty()) {
+                                    if (seeds.isEmpty()) {
                                         return reactor.core.publisher.Mono.just(
                                                 new com.example.pp.dto.List1UserResponse(start, end, dayType, picks, java.util.List.of())
                                         );
                                     }
-                                    return tourFetch.fetch(distinctSeeds, tourRadiusMeters, pageSize, type)
+                                    return tourFetch.fetch(seeds, tourRadiusMeters, pageSize, type)
                                             .defaultIfEmpty(java.util.List.of())
                                             .map(items -> {
                                                 // 버퍼에도 저장(한번 쓰고 버리는 용도)
