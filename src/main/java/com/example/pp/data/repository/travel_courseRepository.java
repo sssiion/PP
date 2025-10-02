@@ -31,12 +31,8 @@ public interface travel_courseRepository extends JpaRepository<travel_course, St
     @Query(value = """
     SELECT a.*
     FROM travel_course a
-    WHERE ST_DWithin(
-      geography(ST_SetSRID(ST_Point(:lon, :lat), 4326)),
-      geography(ST_SetSRID(ST_Point(CAST(a.longitude AS double precision),
-                                    CAST(a.latitude  AS double precision)), 4326)),
-      :radiusMeters
-    )
+    WHERE ST_Distance_Sphere(POINT(:lon,:lat), POINT(CAST(longitude AS DECIMAL(10,6)), CAST(latitude AS DECIMAL(10,6)))) <= :radiusMeters
+    
   """, nativeQuery = true)
     List<travel_course> findEntitiesWithinRadius(@Param("lat") double lat,
                                                  @Param("lon") double lon,

@@ -32,12 +32,8 @@ public interface cultural_facilitiesRepository extends JpaRepository<cultural_fa
     @Query(value = """
     SELECT a.*
     FROM cultural_facilities a
-    WHERE ST_DWithin(
-      geography(ST_SetSRID(ST_Point(:lon, :lat), 4326)),
-      geography(ST_SetSRID(ST_Point(CAST(a.longitude AS double precision),
-                                    CAST(a.latitude  AS double precision)), 4326)),
-      :radiusMeters
-    )
+    WHERE ST_Distance_Sphere(POINT(:lon,:lat), POINT(CAST(longitude AS DECIMAL(10,6)), CAST(latitude AS DECIMAL(10,6)))) <= :radiusMeters
+    
   """, nativeQuery = true)
     List<cultural_facilities> findEntitiesWithinRadius(@Param("lat") double lat,
                                                         @Param("lon") double lon,
