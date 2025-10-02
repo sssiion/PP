@@ -12,6 +12,7 @@ import reactor.core.publisher.Mono;
 
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Map;
 
 
 @RestController
@@ -25,7 +26,7 @@ public class RecommendController {
 
     // 예: /api/recommend/list3?lat=37.5557&lon=126.9730&time=13:30:00&radius=8000&pageSize=200
     @GetMapping("/")
-    public Mono<List<List3BuildService.List3Item>> list3(
+    public  Mono<List<Map<String,Object>>> list3(
             @RequestParam double lat,
             @RequestParam double lon,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.TIME) LocalTime time,
@@ -34,15 +35,16 @@ public class RecommendController {
             @RequestParam(defaultValue= "12") int type
     ){
         // List1: 위치기반 (TourAPI 원본 아이템)
-        Mono<java.util.List<TourPoiResponse.Item>> list1Mono =
-                list1Service.build(lat, lon, time, radius, pageSize, String.valueOf(type));
+        Mono<List<Map<String,Object>>> list1Mono =
+                list1Service.build(lat, lon, time, radius, pageSize);
 
         // List2: 지역기반 contentid (단일 페이지 전량)
-        Mono<java.util.List<String>> list2IdsMono =
-                list2Service.buildAndStore(10000);
+        //Mono<java.util.List<String>> list2IdsMono =
+               // list2Service.buildAndStore(10000);
 
         // List3: 교집합
-        return list3Service.buildAndStore(list1Mono, list2IdsMono, null);
+        //return list3Service.buildAndStore(list1Mono, list2IdsMono, null);.
+        return list1Mono;
     }
     @GetMapping("/list1-detail")
     public Mono<List1UserResponse> list1Detail(
