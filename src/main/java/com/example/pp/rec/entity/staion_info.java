@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 @Table(name="station_info")
 public class staion_info {
 
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
     @Column(name = "station_id", nullable = false, length = 50,updatable = false)
     private String stationId;              // 역번
 
