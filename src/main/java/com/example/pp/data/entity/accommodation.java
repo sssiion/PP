@@ -16,7 +16,7 @@ import lombok.NoArgsConstructor;
 public class accommodation {
 
     @Id
-    @Column(name = "id",updatable = false)
+    @Column(name = "id",updatable = false, length = 255)
     private String Id; // 노선 ID (예: GS05_DOWN, 기본 키)
 
     @Column(name = "name",updatable = false,columnDefinition="TEXT")

@@ -30,12 +30,12 @@ public interface cultural_facilitiesRepository extends JpaRepository<cultural_fa
                                      @Param("radiusMeters") double radiusMeters);
 
     @Query(value = """
-    SELECT a.*
+    SELECT id, name, category, postal_code, address, latitude, longitude, other_info
     FROM cultural_facilities a
     WHERE ST_Distance_Sphere(POINT(:lon,:lat), POINT(CAST(longitude AS DECIMAL(10,6)), CAST(latitude AS DECIMAL(10,6)))) <= :radiusMeters
     
   """, nativeQuery = true)
-    List<cultural_facilities> findEntitiesWithinRadius(@Param("lat") double lat,
+    List<PoiSummary> findEntitiesWithinRadius(@Param("lat") double lat,
                                                         @Param("lon") double lon,
                                                         @Param("radiusMeters") double radiusMeters);
 

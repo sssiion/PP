@@ -22,18 +22,36 @@ public class NearbyPostgisService {
 
 
     // 단일 시드로부터 8개 엔티티를 직접 모아 반환
-    public Map<String, List<?>> findAllEntitiesWithinRadius(double lat, double lon, double radiusMeters) {
+    public Map<String, List<?>> findAllEntitiesWithinRadius(double lat, double lon, double radiusMeters, List<String> categories) {
         Map<String, List<?>> out = new LinkedHashMap<>();
-        out.put("accommodation", accommodationRepository.findEntitiesWithinRadius(lat, lon, radiusMeters));
-        out.put("cultural_facilities", culturalFacilitiesRepository.findEntitiesWithinRadius(lat, lon, radiusMeters));
-        out.put("festivals_performances_events", festivalsRepository.findEntitiesWithinRadius(lat, lon, radiusMeters));
-        out.put("food", foodRepository.findEntitiesWithinRadius(lat, lon, radiusMeters));
-        out.put("leisure_sports", leisureRepository.findEntitiesWithinRadius(lat, lon, radiusMeters));
-        out.put("shopping", shoppingRepository.findEntitiesWithinRadius(lat, lon, radiusMeters));
-        out.put("tourist_attraction", attractionRepository.findEntitiesWithinRadius(lat, lon, radiusMeters));
-        out.put("travel_course", courseRepository.findEntitiesWithinRadius(lat, lon, radiusMeters));
-        return out;
+        final boolean noFilter = categories == null || categories.isEmpty();
+
+        if (noFilter || categories.contains("accommodation")) {
+            out.put("accommodation", accommodationRepository.findEntitiesWithinRadius(lat, lon, radiusMeters));
         }
+        if (noFilter || categories.contains("cultural_facilities")) {
+            out.put("cultural_facilities", culturalFacilitiesRepository.findEntitiesWithinRadius(lat, lon, radiusMeters));
+        }
+        if (noFilter || categories.contains("festivals_performances_events")) {
+            out.put("festivals_performances_events", festivalsRepository.findEntitiesWithinRadius(lat, lon, radiusMeters));
+        }
+        if (noFilter || categories.contains("food")) {
+            out.put("food", foodRepository.findEntitiesWithinRadius(lat, lon, radiusMeters));
+        }
+        if (noFilter || categories.contains("leisure_sports")) {
+            out.put("leisure_sports", leisureRepository.findEntitiesWithinRadius(lat, lon, radiusMeters));
+        }
+        if (noFilter || categories.contains("shopping")) {
+            out.put("shopping", shoppingRepository.findEntitiesWithinRadius(lat, lon, radiusMeters));
+        }
+        if (noFilter || categories.contains("tourist_attraction")) {
+            out.put("tourist_attraction", attractionRepository.findEntitiesWithinRadius(lat, lon, radiusMeters));
+        }
+        if (noFilter || categories.contains("travel_course")) {
+            out.put("travel_course", courseRepository.findEntitiesWithinRadius(lat, lon, radiusMeters));
+        }
+        return out;
+    }
 
         private static List<NearbyDestination> map(String table, List<NearbyRow> rows) {
             List<NearbyDestination> list = new ArrayList<>();

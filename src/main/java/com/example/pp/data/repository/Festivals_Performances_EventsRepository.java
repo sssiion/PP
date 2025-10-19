@@ -30,12 +30,12 @@ public interface Festivals_Performances_EventsRepository extends JpaRepository<F
                                      @Param("radiusMeters") double radiusMeters);
 
     @Query(value = """
-    SELECT a.*
+    SELECT id, name, category, postal_code, address, latitude, longitude, other_info
     FROM festivals_performances_events a
     WHERE ST_Distance_Sphere(POINT(:lon,:lat), POINT(CAST(longitude AS DECIMAL(10,6)), CAST(latitude AS DECIMAL(10,6)))) <= :radiusMeters
     
   """, nativeQuery = true)
-    List<Festivals_Performances_Events> findEntitiesWithinRadius(@Param("lat") double lat,
+    List<PoiSummary> findEntitiesWithinRadius(@Param("lat") double lat,
                                                                 @Param("lon") double lon,
                                                                 @Param("radiusMeters") double radiusMeters);
 

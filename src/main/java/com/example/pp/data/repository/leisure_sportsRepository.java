@@ -29,12 +29,12 @@ public interface leisure_sportsRepository extends JpaRepository<leisure_sports, 
                                      @Param("lon") double lon,
                                      @Param("radiusMeters") double radiusMeters);
     @Query(value = """
-    SELECT a.*
+    SELECT id, name, category, postal_code, address, latitude, longitude, other_info
     FROM leisure_sports a
     WHERE ST_Distance_Sphere(POINT(:lon,:lat), POINT(CAST(longitude AS DECIMAL(10,6)), CAST(latitude AS DECIMAL(10,6)))) <= :radiusMeters
     
   """, nativeQuery = true)
-    List<leisure_sports> findEntitiesWithinRadius(@Param("lat") double lat,
+    List<PoiSummary> findEntitiesWithinRadius(@Param("lat") double lat,
                                                   @Param("lon") double lon,
                                                   @Param("radiusMeters") double radiusMeters);
 }

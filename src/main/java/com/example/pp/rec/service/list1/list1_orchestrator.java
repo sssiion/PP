@@ -50,7 +50,7 @@ public class list1_orchestrator {
 
 
     public Mono<List<Map<String,Object>>> build(double lat, double lon, LocalTime time,
-                                                int tourRadiusMeters, int pageSize) {
+                                                int tourRadiusMeters, int pageSize, List<String> categories) {
         final long t0 = System.nanoTime();
         return Mono.defer(() -> {
                     List<staion_info> nears = nearby.fetch(lat, lon);
@@ -90,7 +90,7 @@ public class list1_orchestrator {
                                                         for (var s : seeds) {
                                                             if (s.lon() == 0d && s.lat() == 0d) { idx++; continue; }
                                                             Map<String, List<?>> results =
-                                                                    nearbyAggregateService.findAllEntitiesWithinRadius(s.lat(), s.lon(), tourRadiusMeters);
+                                                                    nearbyAggregateService.findAllEntitiesWithinRadius(s.lat(), s.lon(), tourRadiusMeters, categories);
                                                             Map<String, Object> wrapper = new LinkedHashMap<>();
                                                             wrapper.put("seedIndex", idx);
                                                             wrapper.put("seedLon", s.lon());

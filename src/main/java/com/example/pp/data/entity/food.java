@@ -16,7 +16,7 @@ import lombok.NoArgsConstructor;
 public class food {
 
     @Id
-    @Column(name = "id",updatable = false)
+    @Column(name = "id",updatable = false, length = 255)
     private String Id;
 
     @Column(name = "name",updatable = false,columnDefinition="TEXT")

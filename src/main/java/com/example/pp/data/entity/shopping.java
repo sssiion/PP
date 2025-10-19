@@ -17,7 +17,7 @@ import lombok.NoArgsConstructor;
 public class shopping {
 
     @Id
-    @Column(name = "id",updatable = false,columnDefinition="TEXT")
+    @Column(name = "id",updatable = false, length = 255)
     private String Id;
 
     @Column(name = "name",updatable = false,columnDefinition="TEXT")

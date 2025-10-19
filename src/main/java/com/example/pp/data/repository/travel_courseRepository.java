@@ -29,12 +29,12 @@ public interface travel_courseRepository extends JpaRepository<travel_course, St
                                      @Param("lon") double lon,
                                      @Param("radiusMeters") double radiusMeters);
     @Query(value = """
-    SELECT a.*
+    SELECT id, name, category, postal_code, address, latitude, longitude, other_info
     FROM travel_course a
     WHERE ST_Distance_Sphere(POINT(:lon,:lat), POINT(CAST(longitude AS DECIMAL(10,6)), CAST(latitude AS DECIMAL(10,6)))) <= :radiusMeters
     
   """, nativeQuery = true)
-    List<travel_course> findEntitiesWithinRadius(@Param("lat") double lat,
+    List<PoiSummary> findEntitiesWithinRadius(@Param("lat") double lat,
                                                  @Param("lon") double lon,
                                                  @Param("radiusMeters") double radiusMeters);
 }
