@@ -1,4 +1,6 @@
-package com.example.pp.rec.config;
+package com.example.pp.auth;
+
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -10,25 +12,38 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
 
-
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
+
+    private final CustomOAuth2UserService customOAuth2UserService;
+
+    public SecurityConfig(CustomOAuth2UserService customOAuth2UserService) {
+        this.customOAuth2UserService = customOAuth2UserService;
+    }
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                // CSRF 보호 비활성화 (Stateless한 REST API에서는 보통 비활성화합니다)
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                // 요청 경로에 대한 접근 권한 설정
+                .headers(headers -> headers.frameOptions(frameOptions -> frameOptions.disable())) // For H2 console
                 .authorizeHttpRequests(authorize -> authorize
-                        // "/api/**" 경로로 오는 모든 요청은 인증 없이 허용
-                        .requestMatchers("/api/**", "/actuator/health").permitAll()
-                        .anyRequest().permitAll()  // 모두 공개라면
+                        .requestMatchers("/", "/css/**", "/images/**", "/js/**", "/h2-console/**", "/login/**", "/oauth2/**", "/api/recommend/**").permitAll()
+                        .anyRequest().authenticated()
+                )
+                .logout(logout -> logout
+                        .logoutSuccessUrl("/")
+                )
+                .oauth2Login(oauth2 -> oauth2
+                        .userInfoEndpoint(userInfo -> userInfo
+                                .userService(customOAuth2UserService)
+                        )
                 );
 
         return http.build();
     }
+
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
