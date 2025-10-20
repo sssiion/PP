@@ -3,42 +3,47 @@ package com.example.pp.auth;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
+import org.springframework.security.config.web.server.ServerHttpSecurity;
+import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.cors.CorsConfigurationSource;
-import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.cors.reactive.CorsConfigurationSource;
+import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
+import reactor.core.publisher.Mono;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 @Configuration
-@EnableWebSecurity
+@EnableWebFluxSecurity
+@RequiredArgsConstructor
 public class SecurityConfig {
 
     private final CustomOAuth2UserService customOAuth2UserService;
 
-    public SecurityConfig(CustomOAuth2UserService customOAuth2UserService) {
-        this.customOAuth2UserService = customOAuth2UserService;
-    }
-
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
         http
-                .csrf(csrf -> csrf.disable())
+                .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .headers(headers -> headers.frameOptions(frameOptions -> frameOptions.disable())) // For H2 console
-                .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/", "/css/**", "/images/**", "/js/**", "/h2-console/**", "/login/**", "/oauth2/**", "/api/recommend/**").permitAll()
-                        .anyRequest().authenticated()
+                .headers(headers -> headers.frameOptions(ServerHttpSecurity.HeaderSpec.FrameOptionsSpec::disable))
+                .authorizeExchange(authorize -> authorize
+                        .pathMatchers("/", "/css/**", "/images/**", "/js/**", "/h2-console/**", "/login/**", "/oauth2/**", "/api/recommend/**").permitAll()
+                        .anyExchange().authenticated()
                 )
-                .logout(logout -> logout
-                        .logoutSuccessUrl("/")
-                )
+                .logout(logout -> logout.logoutUrl("/")) // Simplified logout
                 .oauth2Login(oauth2 -> oauth2
-                        .userInfoEndpoint(userInfo -> userInfo
-                                .userService(customOAuth2UserService)
-                        )
+                        .authenticationSuccessHandler((webFilterExchange, authentication) -> {
+                            var response = webFilterExchange.getExchange().getResponse();
+                            response.setStatusCode(HttpStatus.OK);
+                            response.getHeaders().setContentType(MediaType.APPLICATION_JSON);
+                            byte[] body = "{\"status\":\"success\", \"message\":\"Login successful\"}".getBytes(StandardCharsets.UTF_8);
+                            DataBuffer buffer = response.bufferFactory().wrap(body);
+                            return response.writeWith(Mono.just(buffer));
+                        })
                 );
 
         return http.build();
@@ -47,9 +52,9 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(Arrays.asList("*"));
-        configuration.setAllowedMethods(Arrays.asList("*"));
-        configuration.setAllowedHeaders(Arrays.asList("*"));
+        configuration.setAllowedOriginPatterns(Arrays.asList("*", "*"));
+        configuration.setAllowedMethods(Arrays.asList("*", "*"));
+        configuration.setAllowedHeaders(Arrays.asList("*", "*"));
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

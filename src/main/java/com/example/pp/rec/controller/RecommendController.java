@@ -28,18 +28,13 @@ public class RecommendController {
     private final List3BuildService list3Service;       // 교집합(최종)
     private final DetailService detailService;
 
-    @GetMapping("/")
-    public  Mono<List<Map<String,Object>>> list3(
-            @RequestParam double lat,
-            @RequestParam double lon,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.TIME) LocalTime time,
-            @RequestParam(defaultValue = "5000") int radius,
-            @RequestParam(defaultValue = "2000") int pageSize,
-            @RequestParam(required = false) List<Integer> types
-    ){
+    // DTO for the main recommendation request
+    public record RecommendRequest(Double lat, Double lon, LocalTime time, Integer radius, Integer pageSize, List<Integer> types) {}
+
+    private Mono<List<Map<String, Object>>> handleRecommendation(RecommendRequest request) {
         List<String> categories = null;
-        if (types != null && !types.isEmpty()) {
-            categories = types.stream().map(type -> switch (type) {
+        if (request.types() != null && !request.types().isEmpty()) {
+            categories = request.types().stream().map(type -> switch (type) {
                 case 12 -> "tourist_attraction";
                 case 14 -> "cultural_facilities";
                 case 15 -> "festivals_performances_events";
@@ -52,18 +47,27 @@ public class RecommendController {
             }).filter(Objects::nonNull).collect(Collectors.toList());
         }
 
-        // List1: 위치기반 (TourAPI 원본 아이템)
-        Mono<List<Map<String,Object>>> list1Mono =
-                list1Service.build(lat, lon, time, radius, pageSize, categories);
-
-        // List2: 지역기반 contentid (단일 페이지 전량)
-        //Mono<java.util.List<String>> list2IdsMono =
-               // list2Service.buildAndStore(10000);
-
-        // List3: 교집합
-        //return list3Service.buildAndStore(list1Mono, list2IdsMono, null);.
-        return list1Mono;
+        return list1Service.build(request.lat(), request.lon(), request.time(), request.radius(), request.pageSize(), categories);
     }
+
+    @GetMapping("/")
+    public Mono<List<Map<String,Object>>> list3Get(
+            @RequestParam double lat,
+            @RequestParam double lon,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.TIME) LocalTime time,
+            @RequestParam(defaultValue = "5000") int radius,
+            @RequestParam(defaultValue = "2000") int pageSize,
+            @RequestParam(required = false) List<Integer> types
+    ){
+        RecommendRequest request = new RecommendRequest(lat, lon, time, radius, pageSize, types);
+        return handleRecommendation(request);
+    }
+
+    @PostMapping("/")
+    public Mono<List<Map<String, Object>>> list3Post(@RequestBody RecommendRequest request) {
+        return handleRecommendation(request);
+    }
+
     @GetMapping("/list1-detail")
     public Mono<List1UserResponse> list1Detail(
             @RequestParam double lat,
@@ -76,10 +80,30 @@ public class RecommendController {
         return list1Service.buildResult(lat, lon, time, radius, pageSize, String.valueOf(type)); //500
     }
 
-    @GetMapping("/detail/{category}/{id}")
+    @RequestMapping(value = "/detail/{category}/{id}", method = {RequestMethod.GET, RequestMethod.POST})
     public ResponseEntity<?> getDetail(@PathVariable String category, @PathVariable String id) {
         return detailService.getDetail(category, id)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    // Inner record for the POST request body
+    public record DetailColumnRequest(List<String> ids, String column) {}
+
+    @PostMapping("/detail/{category}/column")
+    public ResponseEntity<Map<String, Object>> getDetailColumn(
+            @PathVariable String category,
+            @RequestBody DetailColumnRequest request) {
+        Map<String, Object> result = detailService.getDetailsForColumn(category, request.ids(), request.column());
+        return ResponseEntity.ok(result);
+    }
+
+    @GetMapping("/detail/{category}/column")
+    public ResponseEntity<Map<String, Object>> getDetailColumnGet(
+            @PathVariable String category,
+            @RequestParam List<String> ids,
+            @RequestParam String column) {
+        Map<String, Object> result = detailService.getDetailsForColumn(category, ids, column);
+        return ResponseEntity.ok(result);
     }
 }
