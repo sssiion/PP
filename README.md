@@ -33,3 +33,51 @@
 
 - **아키텍처 통일**: 이제 이 프로젝트는 **Spring WebFlux**와 **Netty** 서버를 기반으로 동작하는 완전한 리액티브 애플리케이션이 되었습니다.
 - **안정성 확보**: 의존성 충돌의 원인이 사라져 애플리케이션이 안정적으로 실행되며, 소셜 로그인 후 발생하던 모든 오류가 해결되었습니다.
+
+---
+
+## 혼잡도 예측 API 추가 (2025-10-22)
+
+### 1. 기능 개요
+
+외부 Python 서버(`PP_algorithm`)에서 계산된 실시간 장소 혼잡도 예측 결과를 받아오는 API를 추가했습니다.
+
+이 기능은 Spring 서버가 클라이언트로부터 위경도 및 시간 값을 받아 Python 서버에 전달하고, 그 응답을 다시 클라이언트에게 반환하는 중계 역할을 수행합니다. 이를 통해 Java 기반의 메인 애플리케이션과 Python 기반의 AI 예측 모델이 효과적으로 통합됩니다.
+
+### 2. 추가 및 수정된 파일
+
+- **`CongestionController.java`**:
+  - 클라이언트 요청을 받는 `/api/congestion` 엔드포인트를 정의한 새로운 컨트롤러입니다.
+- **`CongestionService.java`**:
+  - `WebClient`를 사용하여 실제로 Python 서버에 API 요청을 보내고 응답을 받아오는 비즈니스 로직을 담당하는 새로운 서비스입니다.
+- **`CongestionRequestDto.java` / `CongestionResponseDto.java`**:
+  - Python 서버와의 데이터 통신을 위해 특별히 제작된 데이터 전송 객체(DTO)입니다.
+- **`WebClientConfig.java`**:
+  - Python 서버(`http://127.0.0.1:5001`)와 통신하기 위한 새로운 `congestionWebClient` Bean 설정을 추가했습니다.
+- **`application.properties`**:
+  - `congestion.api.base-url` 프로퍼티를 추가하여 Python 서버의 주소를 설정했습니다.
+
+### 3. API 사용 방법
+
+- **Endpoint**: `GET /api/congestion`
+- **Method**: `GET`
+- **설명**: 특정 위치와 시간에 대한 혼잡도 예측 레벨을 조회합니다.
+- **쿼리 파라미터**:
+  - `lat` (String): 조회할 위치의 위도
+  - `lon` (String): 조회할 위치의 경도
+  - `datetime` (String): 조회할 날짜 및 시간 (ISO 8601 형식)
+
+- **요청 예시**:
+  ```
+  GET http://localhost:8082/api/congestion?lat=37.5665&lon=126.9780&datetime=2025-10-22T14:30:00
+  ```
+
+- **성공 응답 예시**:
+  ```json
+  {
+      "latitude": 37.5665,
+      "longitude": 126.9780,
+      "datetime": "2025-10-22T14:30:00",
+      "congestion_level": "붐빔"
+  }
+  ```

@@ -77,6 +77,17 @@ public class WebClientConfig {
                                          @Value("${seoulmetro.api.base-url}") String baseUrl) {
         return builder.baseUrl(baseUrl).filter(errorFilter()).build();
     }
+
+    @Bean(name = "congestionWebClient")
+    public WebClient congestionWebClient(WebClient.Builder builder,
+                                         @Value("${congestion.api.base-url}") String baseUrl) {
+        return builder.baseUrl(baseUrl)
+                .filter(logRequestKo())
+                .filter(logResponseKo())
+                .filter(errorFilter())
+                .build();
+    }
+
     private static ExchangeFilterFunction logRequestKo() {
         return ExchangeFilterFunction.ofRequestProcessor(req -> {
             log.info("[외부호출 시작] 메서드={}, URL={}, 헤더={}", req.method(), req.url(), req.headers()); // 한국어 요약 [web:77]
