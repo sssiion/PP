@@ -31,8 +31,8 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .headers(headers -> headers.frameOptions(ServerHttpSecurity.HeaderSpec.FrameOptionsSpec::disable))
                 .authorizeExchange(authorize -> authorize
-                        .pathMatchers("/", "/css/**", "/images/**", "/js/**", "/h2-console/**", "/login/**", "/oauth2/**", "/api/recommend/**", "/api/congestion/**").permitAll()
-                        .anyExchange().authenticated()
+                        //.pathMatchers("/", "/css/**", "/images/**", "/js/**", "/h2-console/**", "/login/**", "/oauth2/**", "/api/recommend/**", "/api/congestion/**").permitAll()
+                        .anyExchange().permitAll()
                 )
                 .logout(logout -> logout.logoutUrl("/")) // Simplified logout
                 .oauth2Login(oauth2 -> oauth2
