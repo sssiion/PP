@@ -2,6 +2,171 @@
 
 ---
 
+## API Usage Guide
+
+이 문서는 PP 프로젝트의 백엔드 API를 사용하는 방법을 안내합니다.
+
+### 1. 추천 API (`/api/recommend`)
+
+#### 1.1. 위치 기반 추천
+
+- **Endpoint**: `/api/recommend/`
+- **Method**: `GET`, `POST`
+- **설명**: 특정 위치와 시간을 기준으로 주변 장소를 추천합니다.
+- **주요 파라미터**:
+  - `lat` (Double, 필수): 위도
+  - `lon` (Double, 필수): 경도
+  - `time` (String, 필수): 기준 시간 (형식: `HH:mm:ss`)
+  - `radius` (Integer, 선택, 기본값: 5000): 검색 반경 (미터)
+  - `pageSize` (Integer, 선택, 기본값: 2000): 최대 결과 수
+  - `types` (List<Integer>, 선택): 장소 타입 코드 리스트. 코드는 아래 표를 참고하세요.
+
+- **`GET` 요청 예시**:
+  ```bash
+  curl "http://localhost:8082/api/recommend/?lat=37.5665&lon=126.9780&time=14:30:00&types=12,39"
+  ```
+
+- **`POST` 요청 예시**:
+  ```bash
+  curl -X POST http://localhost:8082/api/recommend/ \
+       -H "Content-Type: application/json" \
+       -d '{
+             "lat": 37.5665,
+             "lon": 126.9780,
+             "time": "14:30:00",
+             "radius": 3000,
+             "types": [12, 39]
+           }'
+  ```
+
+#### 1.2. 혼잡도를 포함한 위치 기반 추천
+
+- **Endpoint**: `/api/recommend/with-congestion`
+- **Method**: `GET`, `POST`
+- **설명**: 위치 기반 추천 결과에 특정 시간의 **예상 혼잡도** 정보를 포함하여 반환합니다.
+- **추가 파라미터**:
+  - `congestionDateTime` (String, 필수): 혼잡도를 조회할 기준 날짜와 시간 (ISO 8601 형식: `YYYY-MM-DDTHH:mm:ss`)
+- **`GET` 요청 예시**:
+  ```bash
+  curl "http://localhost:8082/api/recommend/with-congestion?lat=37.5665&lon=126.9780&time=14:30:00&congestionDateTime=2025-10-23T17:00:00&types=12"
+  ```
+- **`POST` 요청 예시**:
+  ```bash
+  curl -X POST http://localhost:8082/api/recommend/with-congestion \
+       -H "Content-Type: application/json" \
+       -d '{
+             "lat": 37.5665,
+             "lon": 126.9780,
+             "time": "14:30:00",
+             "congestionDateTime": "2025-10-23T17:00:00",
+             "types": [12]
+           }'
+  ```
+- **성공 응답 예시**:
+  ```json
+  [
+    {
+      "name": "경복궁",
+      "latitude": "37.579617",
+      "longitude": "126.977041",
+      "congestionLevel": "보통"
+    }
+  ]
+  ```
+
+#### 1.3. 장소 상세 정보 조회
+
+- **Endpoint**: `/api/recommend/detail/{category}/{id}`
+- **Method**: `GET`, `POST`
+- **설명**: 특정 장소의 모든 상세 정보를 조회합니다.
+- **URL 파라미터**:
+  - `category` (String, 필수): 장소의 카테고리 (아래 `카테고리 및 타입 코드` 표 참고)
+  - `id` (String, 필수): 장소의 고유 ID (`contentid`)
+- **`GET` 요청 예시**:
+  ```bash
+  curl http://localhost:8082/api/recommend/detail/tourist_attraction/126508
+  ```
+
+#### 1.4. 장소의 특정 정보 목록 조회
+
+- **Endpoint**: `/api/recommend/detail/{category}/column`
+- **Method**: `GET`, `POST`
+- **설명**: 여러 장소에 대해 지정된 특정 정보(컬럼)만 조회합니다.
+- **URL 파라미터**:
+  - `category` (String, 필수): 장소 카테고리
+- **요청 파라미터**:
+  - `ids` (List<String>, 필수): 조회할 장소들의 ID 목록
+  - `column` (String, 필수): 조회할 정보의 컬럼명 (예: `title`, `addr1`, `firstimage`)
+- **`GET` 요청 예시**:
+  ```bash
+  curl "http://localhost:8082/api/recommend/detail/food/column?ids=2667283,2849939&column=firstimage"
+  ```
+- **`POST` 요청 예시**:
+  ```bash
+  curl -X POST http://localhost:8082/api/recommend/detail/food/column \
+       -H "Content-Type: application/json" \
+       -d '{
+             "ids": ["2667283", "2849939"],
+             "column": "firstimage"
+           }'
+  ```
+
+### 2. 혼잡도 API (`/api/congestion`)
+
+- **Endpoint**: `/api/congestion`
+- **Method**: `POST`
+- **설명**: 여러 장소에 대한 혼잡도 예측 결과를 일괄적으로 조회합니다.
+- **요청 본문 (Request Body)**: `CongestionRequestDto` 객체의 리스트
+  ```json
+  [
+    {
+      "latitude": 37.5665,
+      "longitude": 126.9780,
+      "datetime": "2025-10-23T15:00:00"
+    },
+    {
+      "latitude": 37.5803,
+      "longitude": 126.9762,
+      "datetime": "2025-10-23T18:30:00"
+    }
+  ]
+  ```
+- **`POST` 요청 예시**:
+  ```bash
+  curl -X POST http://localhost:8082/api/congestion \
+       -H "Content-Type: application/json" \
+       -d '[{"latitude": 37.5665, "longitude": 126.9780, "datetime": "2025-10-23T15:00:00"}]'
+  ```
+- **성공 응답 예시**:
+  ```json
+  [
+    {
+      "latitude": 37.5665,
+      "longitude": 126.9780,
+      "datetime": "2025-10-23T15:00:00",
+      "congestionLevel": "붐빔"
+    }
+  ]
+  ```
+
+### 부록: 카테고리 및 타입 코드
+
+| 타입 코드 (type) | 카테고리명 (`category`)         | 설명                       |
+| ---------------- | ------------------------------- | -------------------------- |
+| 12               | `tourist_attraction`            | 관광지                     |
+| 14               | `cultural_facilities`           | 문화시설                   |
+| 15               | `festivals_performances_events` | 축제/공연/행사             |
+| 25               | `travel_course`                 | 여행코스                   |
+| 28               | `leisure_sports`                | 레포츠                     |
+| 32               | `accommodation`                 | 숙박                       |
+| 38               | `shopping`                      | 쇼핑                       |
+| 39               | `food`                          | 음식점                     |
+
+---
+
+
+---
+
 ## 아키텍처 수정 (2025-10-20)
 
 ### 1. 문제 상황
