@@ -2,6 +2,7 @@ package com.example.pp.rec.controller;
 
 import com.example.pp.data.service.DetailService;
 import com.example.pp.rec.dto.List1UserResponse;
+import com.example.pp.rec.service.CombinedRecommendationService;
 import com.example.pp.rec.service.List2SeoulAreaService;
 import com.example.pp.rec.service.List3BuildService;
 import com.example.pp.rec.service.list1.list1_orchestrator;
@@ -27,9 +28,10 @@ public class RecommendController {
     private final List2SeoulAreaService list2Service;   // 지역기반(contentid만)
     private final List3BuildService list3Service;       // 교집합(최종)
     private final DetailService detailService;
+    private final CombinedRecommendationService combinedService; // 신규 서비스 주입
 
     // DTO for the main recommendation request
-    public record RecommendRequest(Double lat, Double lon, LocalTime time, Integer radius, Integer pageSize, List<Integer> types) {}
+    public record RecommendRequest(Double lat, Double lon, LocalTime time, Integer radius, Integer pageSize, List<Integer> types, String congestionDateTime) {}
 
     private Mono<List<Map<String, Object>>> handleRecommendation(RecommendRequest request) {
         List<String> categories = null;
@@ -50,6 +52,25 @@ public class RecommendController {
         return list1Service.build(request.lat(), request.lon(), request.time(), request.radius(), request.pageSize(), categories);
     }
 
+    private Mono<List<Map<String, Object>>> handleRecommendationWithCongestion(RecommendRequest request) {
+        List<String> categories = null;
+        if (request.types() != null && !request.types().isEmpty()) {
+            categories = request.types().stream().map(type -> switch (type) {
+                case 12 -> "tourist_attraction";
+                case 14 -> "cultural_facilities";
+                case 15 -> "festivals_performances_events";
+                case 25 -> "travel_course";
+                case 28 -> "leisure_sports";
+                case 32 -> "accommodation";
+                case 38 -> "shopping";
+                case 39 -> "food";
+                default -> null;
+            }).filter(Objects::nonNull).collect(Collectors.toList());
+        }
+
+        return combinedService.recommendWithCongestion(request.lat(), request.lon(), request.time(), request.radius(), request.pageSize(), categories, request.congestionDateTime());
+    }
+
     @GetMapping("/")
     public Mono<List<Map<String,Object>>> list3Get(
             @RequestParam double lat,
@@ -59,13 +80,32 @@ public class RecommendController {
             @RequestParam(defaultValue = "2000") int pageSize,
             @RequestParam(required = false) List<Integer> types
     ){
-        RecommendRequest request = new RecommendRequest(lat, lon, time, radius, pageSize, types);
+        RecommendRequest request = new RecommendRequest(lat, lon, time, radius, pageSize, types, null);
         return handleRecommendation(request);
     }
 
     @PostMapping("/")
     public Mono<List<Map<String, Object>>> list3Post(@RequestBody RecommendRequest request) {
         return handleRecommendation(request);
+    }
+
+    @GetMapping("/with-congestion")
+    public Mono<List<Map<String,Object>>> list3GetWithCongestion(
+            @RequestParam double lat,
+            @RequestParam double lon,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.TIME) LocalTime time,
+            @RequestParam String congestionDateTime, // 혼잡도 시간 파라미터 추가
+            @RequestParam(defaultValue = "5000") int radius,
+            @RequestParam(defaultValue = "2000") int pageSize,
+            @RequestParam(required = false) List<Integer> types
+    ){
+        RecommendRequest request = new RecommendRequest(lat, lon, time, radius, pageSize, types, congestionDateTime);
+        return handleRecommendationWithCongestion(request);
+    }
+
+    @PostMapping("/with-congestion")
+    public Mono<List<Map<String, Object>>> list3PostWithCongestion(@RequestBody RecommendRequest request) {
+        return handleRecommendationWithCongestion(request);
     }
 
     @GetMapping("/list1-detail")

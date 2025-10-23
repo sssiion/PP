@@ -22,7 +22,6 @@ public class list1_orchestrator {
     private final list1_line_contexts lineCtxs;
     private final list1_resolve_seeds resolver;
     private final list1_tour_fetch tourFetch;
-    private final list1_runtime_buffer buffer;
     private final NearbyPostgisService nearbyAggregateService;
 
 
@@ -33,7 +32,7 @@ public class list1_orchestrator {
             list1_line_contexts lineCtxs,
             SubwayStationRepository stationRepo,
             TourApiV2Client tourClient,
-            list1_runtime_buffer buffer, NearbyPostgisService nearbyAggregateService
+            NearbyPostgisService nearbyAggregateService
 
     ) {
 
@@ -42,8 +41,6 @@ public class list1_orchestrator {
         this.lineCtxs = lineCtxs;
         this.resolver = new list1_resolve_seeds(stationRepo);
         this.tourFetch = new list1_tour_fetch(tourClient);
-        this.buffer = buffer;
-
         this.nearbyAggregateService = nearbyAggregateService;
     }
 
@@ -54,7 +51,6 @@ public class list1_orchestrator {
         final long t0 = System.nanoTime();
         return Mono.defer(() -> {
                     List<staion_info> nears = nearby.fetch(lat, lon);
-                    buffer.setNearbyStations(nears);
                     if (nears.isEmpty()) return Mono.just(List.<Map<String,Object>>of()); // 빈 리스트도 제네릭 명시
 
                     final String dayType = "DAY";
@@ -63,7 +59,6 @@ public class list1_orchestrator {
 
                     return findLines.find(nears, dayType, start, end)
                             .flatMap(found -> {
-                                buffer.setFoundLines(found);
                                 if (found.isEmpty()) return Mono.just(List.<Map<String,Object>>of());
 
                                 Set<String> lineParams = found.stream()
@@ -72,16 +67,13 @@ public class list1_orchestrator {
 
                                 return lineCtxs.fetch(lineParams)
                                         .flatMap(lineCtxMap -> {
-                                            buffer.setLineCtxMap(lineCtxMap);
 
                                             var pair = list1_next_stations.pick(found, lineCtxMap);
                                             Map<String,String> normToOrig = pair.getKey();
                                             Map<String,String> normToLine = pair.getValue();
-                                            buffer.setNextStations(normToOrig, normToLine);
                                             if (normToOrig.isEmpty()) return Mono.just(List.<Map<String,Object>>of());
 
                                             List<list1_models.Seed> seeds = resolver.resolve(normToOrig, normToLine);
-                                            buffer.setSeeds(seeds);
                                             if (seeds.isEmpty()) return Mono.just(List.<Map<String,Object>>of());
 
                                             return Mono.fromCallable(() -> {
@@ -134,7 +126,6 @@ public class list1_orchestrator {
 
 // 1) 주변역 조회(메모리 보관)
             java.util.List<staion_info> nears = nearby.fetch(lat, lon);
-            buffer.setNearbyStations(nears);
             if (nears.isEmpty()) {
                 return reactor.core.publisher.Mono.just(
                         new List1UserResponse(time, time.plusMinutes(10), "DAY",
@@ -158,7 +149,6 @@ public class list1_orchestrator {
 
             return findLines.find(nears, dayType, start, end)
                     .flatMap(found -> {
-                        buffer.setFoundLines(found);
                         if (found.isEmpty()) {
                             return reactor.core.publisher.Mono.just(
                                     new List1UserResponse(start, end, dayType,
@@ -180,7 +170,6 @@ public class list1_orchestrator {
 
                         return lineCtxs.fetch(lineParams)
                                 .flatMap(lineCtxMap -> {
-                                    buffer.setLineCtxMap(lineCtxMap);
 // 5) 각 라인별로 기준역 인덱스 → 다음/다다음역 이름과 좌표 계산
                                     java.util.List<List1UserResponse.LinePick> picks = new java.util.ArrayList<>();
                                     java.util.List<list1_models.Seed> seeds = new java.util.ArrayList<>();
@@ -261,11 +250,6 @@ public class list1_orchestrator {
 
                                     }
 
-                                    buffer.setNextStations(nameMap, lineMap);
-                                    buffer.setSeeds(seeds);
-
-
-
 // 6) 관광지 조회(필요 시 호출, 아니면 빈 리스트)
 
                                     if (seeds.isEmpty()) {
@@ -277,21 +261,7 @@ public class list1_orchestrator {
 
                                     return tourFetch.fetch(seeds, tourRadiusMeters, pageSize, type)
                                             .defaultIfEmpty(java.util.List.of())
-                                            .map(items -> {
-// 버퍼에도 저장(한번 쓰고 버리는 용도)
-
-                                                java.util.Map<String, TourPoiResponse.Item> map =
-                                                        items.stream().collect(java.util.stream.Collectors.toMap(
-                                                                TourPoiResponse.Item::contentid,
-                                                                java.util.function.Function.identity(),
-                                                                (a,b)->a,
-                                                                java.util.LinkedHashMap::new
-                                                        ));
-
-                                                buffer.setTourItems(map);
-                                                return new List1UserResponse(start, end, dayType, picks, items);
-
-                                            });
+                                            .map(items -> new List1UserResponse(start, end, dayType, picks, items));
 
                                 });
 

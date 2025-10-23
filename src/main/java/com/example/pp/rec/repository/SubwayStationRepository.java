@@ -9,11 +9,11 @@ import java.util.Optional;
 
 public interface SubwayStationRepository extends JpaRepository<staion_info, String> {
 
-    // 100m 반경 내 역을 거리순으로(로그의 ST_Distance_Sphere SQL 기반)
+    // 1000m 반경 내 역을 거리순으로(로그의 ST_Distance_Sphere SQL 기반)
     @Query(value = """
       SELECT s.* 
       FROM station_info s
-      WHERE ST_Distance_Sphere(POINT(s.longitude, s.latitude), POINT(?2, ?1)) <= 100
+      WHERE ST_Distance_Sphere(POINT(s.longitude, s.latitude), POINT(?2, ?1)) <= 1000
       ORDER BY ST_Distance_Sphere(POINT(s.longitude, s.latitude), POINT(?2, ?1)) ASC
       """, nativeQuery = true)
     List<staion_info> findAllWithinRadiusOrderByDistanceAsc(double lat, double lon);

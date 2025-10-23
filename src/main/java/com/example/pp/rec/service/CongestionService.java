@@ -70,7 +70,7 @@ public class CongestionService {
                                         Double.parseDouble(req.getLat()),
                                         Double.parseDouble(req.getLon()),
                                         req.getDatetime(),
-                                        "Error: Python server connection refused"
+                                        ""
                                 ))
                                 .collect(Collectors.toList());
                         return Mono.just(errorResponses);
