@@ -12,6 +12,8 @@ import org.springframework.web.reactive.function.client.WebClientRequestExceptio
 import reactor.core.publisher.Mono;
 
 import java.net.ConnectException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream; // New import
@@ -34,7 +36,7 @@ public class CongestionService {
         String commonDatetime = requestDtos.get(0).getDatetime();
 
         List<LocationDto> locations = requestDtos.stream()
-                .map(dto -> new LocationDto(dto.getLat(), dto.getLon()))
+                .map(dto -> new LocationDto(Double.parseDouble(dto.getLat()), Double.parseDouble(dto.getLon())))
                 .collect(Collectors.toList());
 
         PythonCongestionRequest pythonRequest = new PythonCongestionRequest(commonDatetime, locations);

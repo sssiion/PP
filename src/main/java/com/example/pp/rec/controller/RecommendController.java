@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalTime;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -31,7 +32,7 @@ public class RecommendController {
     private final CombinedRecommendationService combinedService; // 신규 서비스 주입
 
     // DTO for the main recommendation request
-    public record RecommendRequest(Double lat, Double lon, LocalTime time, Integer radius, Integer pageSize, List<Integer> types, String congestionDateTime) {}
+    public record RecommendRequest(Double lat, Double lon, LocalTime time, Integer radius, Integer pageSize, List<Integer> types, LocalDateTime congestionDateTime) {}
 
     private Mono<List<Map<String, Object>>> handleRecommendation(RecommendRequest request) {
         List<String> categories = null;
@@ -94,7 +95,7 @@ public class RecommendController {
             @RequestParam double lat,
             @RequestParam double lon,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.TIME) LocalTime time,
-            @RequestParam String congestionDateTime, // 혼잡도 시간 파라미터 추가
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime congestionDateTime, // 혼잡도 시간 파라미터 추가
             @RequestParam(defaultValue = "5000") int radius,
             @RequestParam(defaultValue = "2000") int pageSize,
             @RequestParam(required = false) List<Integer> types

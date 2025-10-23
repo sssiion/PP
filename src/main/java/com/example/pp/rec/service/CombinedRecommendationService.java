@@ -10,6 +10,8 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalTime;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -25,7 +27,7 @@ public class CombinedRecommendationService {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public Mono<List<Map<String, Object>>> recommendWithCongestion(
-            Double lat, Double lon, LocalTime time, Integer radius, Integer pageSize, List<String> categories, String congestionDateTime) {
+            Double lat, Double lon, LocalTime time, Integer radius, Integer pageSize, List<String> categories, LocalDateTime congestionDateTime) {
 
         return list1Service.build(lat, lon, time, radius, pageSize, categories)
                 .flatMap(recommendations -> {
@@ -48,7 +50,7 @@ public class CombinedRecommendationService {
                                     congestionRequests.add(new CongestionRequestDto(
                                             placeLat.toString(),
                                             placeLon.toString(),
-                                            congestionDateTime
+                                            congestionDateTime.format(DateTimeFormatter.ISO_DATE_TIME)
                                     ));
                                 }
                             }
