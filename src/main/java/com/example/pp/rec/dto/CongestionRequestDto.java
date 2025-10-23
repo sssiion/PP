@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class CongestionRequestDto {
-    private String lat;
-    private String lon;
+    private Double latitude;
+    private Double longitude;
     private String datetime;
 }

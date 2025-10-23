@@ -48,8 +48,8 @@ public class CombinedRecommendationService {
                                 Object placeLon = placeMap.get("longitude");
                                 if (placeLat != null && placeLon != null) {
                                     congestionRequests.add(new CongestionRequestDto(
-                                            placeLat.toString(),
-                                            placeLon.toString(),
+                                            Double.valueOf(placeLat.toString()),
+                                            Double.valueOf(placeLon.toString()),
                                             congestionDateTime.format(DateTimeFormatter.ISO_DATE_TIME)
                                     ));
                                 }

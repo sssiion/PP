@@ -36,7 +36,7 @@ public class CongestionService {
         String commonDatetime = requestDtos.get(0).getDatetime();
 
         List<LocationDto> locations = requestDtos.stream()
-                .map(dto -> new LocationDto(Double.parseDouble(dto.getLat()), Double.parseDouble(dto.getLon())))
+                .map(dto -> new LocationDto(dto.getLatitude(), dto.getLongitude()))
                 .collect(Collectors.toList());
 
         PythonCongestionRequest pythonRequest = new PythonCongestionRequest(commonDatetime, locations);
@@ -55,8 +55,8 @@ public class CongestionService {
                                 CongestionRequestDto reqDto = requestDtos.get(index);
                                 String congestionLevel = congestionLevels.size() > index ? congestionLevels.get(index) : "Unknown";
                                 return new CongestionResponseDto(
-                                        Double.parseDouble(reqDto.getLat()),
-                                        Double.parseDouble(reqDto.getLon()),
+                                        reqDto.getLatitude(),
+                                        reqDto.getLongitude(),
                                         reqDto.getDatetime(),
                                         congestionLevel
                                 );
@@ -69,8 +69,8 @@ public class CongestionService {
                         // Return a list of error responses for each requested item
                         List<CongestionResponseDto> errorResponses = requestDtos.stream()
                                 .map(req -> new CongestionResponseDto(
-                                        Double.parseDouble(req.getLat()),
-                                        Double.parseDouble(req.getLon()),
+                                        req.getLatitude(),
+                                        req.getLongitude(),
                                         req.getDatetime(),
                                         ""
                                 ))

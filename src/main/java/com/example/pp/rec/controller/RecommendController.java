@@ -50,7 +50,11 @@ public class RecommendController {
             }).filter(Objects::nonNull).collect(Collectors.toList());
         }
 
-        return list1Service.build(request.lat(), request.lon(), request.time(), request.radius(), request.pageSize(), categories);
+        // Set default values for radius and pageSize if they are null for POST requests
+        Integer radius = (request.radius() == null) ? 5000 : request.radius();
+        Integer pageSize = (request.pageSize() == null) ? 2000 : request.pageSize();
+
+        return list1Service.build(request.lat(), request.lon(), request.time(), radius, pageSize, categories);
     }
 
     private Mono<List<Map<String, Object>>> handleRecommendationWithCongestion(RecommendRequest request) {
@@ -69,7 +73,11 @@ public class RecommendController {
             }).filter(Objects::nonNull).collect(Collectors.toList());
         }
 
-        return combinedService.recommendWithCongestion(request.lat(), request.lon(), request.time(), request.radius(), request.pageSize(), categories, request.congestionDateTime());
+        // Set default values for radius and pageSize if they are null for POST requests
+        Integer radius = (request.radius() == null) ? 5000 : request.radius();
+        Integer pageSize = (request.pageSize() == null) ? 2000 : request.pageSize();
+
+        return combinedService.recommendWithCongestion(request.lat(), request.lon(), request.time(), radius, pageSize, categories, request.congestionDateTime());
     }
 
     @GetMapping("/")
