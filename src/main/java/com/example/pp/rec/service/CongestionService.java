@@ -2,8 +2,10 @@ package com.example.pp.rec.service;
 
 import com.example.pp.rec.dto.CongestionRequestDto;
 import com.example.pp.rec.dto.CongestionResponseDto;
+import com.example.pp.rec.dto.LocationDto; // New import
+import com.example.pp.rec.dto.PythonCongestionRequest; // New import
+import com.example.pp.rec.dto.PythonCongestionResponse; // New import
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientRequestException;
@@ -12,6 +14,7 @@ import reactor.core.publisher.Mono;
 import java.net.ConnectException;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream; // New import
 
 @Service
 public class CongestionService {
@@ -23,11 +26,41 @@ public class CongestionService {
     }
 
     public Mono<List<CongestionResponseDto>> getCongestion(List<CongestionRequestDto> requestDtos) {
+        if (requestDtos == null || requestDtos.isEmpty()) {
+            return Mono.just(List.of());
+        }
+
+        // Assuming datetime is consistent across all requests in the batch for the Python API
+        String commonDatetime = requestDtos.get(0).getDatetime();
+
+        List<LocationDto> locations = requestDtos.stream()
+                .map(dto -> new LocationDto(dto.getLat(), dto.getLon()))
+                .collect(Collectors.toList());
+
+        PythonCongestionRequest pythonRequest = new PythonCongestionRequest(commonDatetime, locations);
+
         return webClient.post()
-                .uri("/get-congestion")
-                .bodyValue(requestDtos)
+                .uri("/get-congestion") // Python API endpoint
+                .bodyValue(pythonRequest)
                 .retrieve()
-                .bodyToMono(new ParameterizedTypeReference<List<CongestionResponseDto>>() {})
+                .bodyToMono(PythonCongestionResponse.class) // Expect PythonCongestionResponse
+                .map(pythonResponse -> {
+                    List<String> congestionLevels = pythonResponse.getCongestion_levels();
+                    // Map Python's response back to our CongestionResponseDto list
+                    // Assuming the order of congestion_levels matches the order of locations in the request
+                    return IntStream.range(0, requestDtos.size())
+                            .mapToObj(index -> {
+                                CongestionRequestDto reqDto = requestDtos.get(index);
+                                String congestionLevel = congestionLevels.size() > index ? congestionLevels.get(index) : "Unknown";
+                                return new CongestionResponseDto(
+                                        Double.parseDouble(reqDto.getLat()),
+                                        Double.parseDouble(reqDto.getLon()),
+                                        reqDto.getDatetime(),
+                                        congestionLevel
+                                );
+                            })
+                            .collect(Collectors.toList());
+                })
                 .onErrorResume(WebClientRequestException.class, e -> {
                     if (e.getCause() instanceof ConnectException) {
                         // Handle connection refused specifically
