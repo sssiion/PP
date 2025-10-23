@@ -38,7 +38,7 @@ public class DetailService {
         };
     }
 
-    public Map<String, Object> getDetailsForColumn(String category, List<String> ids, String column) {
+    public Map<String, Map<String, Object>> getDetailsForColumn(String category, List<String> ids, List<String> columns) {
         List<?> entities = switch (category.toLowerCase()) {
             case "accommodation" -> accommodationRepository.findAllById(ids);
             case "cultural_facilities" -> culturalFacilitiesRepository.findAllById(ids);
@@ -58,7 +58,11 @@ public class DetailService {
         return entities.stream()
                 .collect(Collectors.toMap(
                         entity -> (String) getFieldValue(entity, "Id"),
-                        entity -> getFieldValue(entity, column)
+                        entity -> columns.stream()
+                                .collect(Collectors.toMap(
+                                        Function.identity(),
+                                        column -> getFieldValue(entity, column)
+                                ))
                 ));
     }
 

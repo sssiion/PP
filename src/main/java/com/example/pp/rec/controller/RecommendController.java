@@ -129,22 +129,22 @@ public class RecommendController {
     }
 
     // Inner record for the POST request body
-    public record DetailColumnRequest(List<String> ids, String column) {}
+    public record DetailColumnRequest(List<String> ids, List<String> columns) {}
 
     @PostMapping("/detail/{category}/column")
-    public ResponseEntity<Map<String, Object>> getDetailColumn(
+    public ResponseEntity<Map<String, Map<String, Object>>> getDetailColumn(
             @PathVariable String category,
             @RequestBody DetailColumnRequest request) {
-        Map<String, Object> result = detailService.getDetailsForColumn(category, request.ids(), request.column());
+        Map<String, Map<String, Object>> result = detailService.getDetailsForColumn(category, request.ids(), request.columns());
         return ResponseEntity.ok(result);
     }
 
     @GetMapping("/detail/{category}/column")
-    public ResponseEntity<Map<String, Object>> getDetailColumnGet(
+    public ResponseEntity<Map<String, Map<String, Object>>> getDetailColumnGet(
             @PathVariable String category,
             @RequestParam List<String> ids,
-            @RequestParam String column) {
-        Map<String, Object> result = detailService.getDetailsForColumn(category, ids, column);
+            @RequestParam List<String> columns) {
+        Map<String, Map<String, Object>> result = detailService.getDetailsForColumn(category, ids, columns);
         return ResponseEntity.ok(result);
     }
 }

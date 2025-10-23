@@ -91,24 +91,37 @@
 
 - **Endpoint**: `/api/recommend/detail/{category}/column`
 - **Method**: `GET`, `POST`
-- **설명**: 여러 장소에 대해 지정된 특정 정보(컬럼)만 조회합니다.
+- **설명**: 여러 장소에 대해 지정된 하나 이상의 정보(컬럼)를 조회합니다.
 - **URL 파라미터**:
   - `category` (String, 필수): 장소 카테고리
 - **요청 파라미터**:
   - `ids` (List<String>, 필수): 조회할 장소들의 ID 목록
-  - `column` (String, 필수): 조회할 정보의 컬럼명 (예: `title`, `addr1`, `firstimage`)
-- **`GET` 요청 예시**:
+  - `columns` (List<String>, 필수): 조회할 정보의 컬럼명 리스트 (예: `title`, `addr1`, `firstimage`)
+- **`GET` 요청 예시 (여러 컬럼)**:
   ```bash
-  curl "http://localhost:8082/api/recommend/detail/food/column?ids=2667283,2849939&column=firstimage"
+  curl "http://localhost:8082/api/recommend/detail/food/column?ids=2667283,2849939&columns=title,firstimage"
   ```
-- **`POST` 요청 예시**:
+- **`POST` 요청 예시 (여러 컬럼)**:
   ```bash
   curl -X POST http://localhost:8082/api/recommend/detail/food/column \
        -H "Content-Type: application/json" \
        -d '{
              "ids": ["2667283", "2849939"],
-             "column": "firstimage"
+             "columns": ["title", "firstimage"]
            }'
+  ```
+- **성공 응답 예시 (여러 컬럼)**:
+  ```json
+  {
+    "2667283": {
+      "title": "반포치킨",
+      "firstimage": "http://tong.visitkorea.or.kr/cms/resource/75/2667275_image2_1.jpg"
+    },
+    "2849939": {
+      "title": "서울숯불닭갈비",
+      "firstimage": null
+    }
+  }
   ```
 
 ### 2. 혼잡도 API (`/api/congestion`)
