@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.WebSession;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalTime;
@@ -57,7 +58,7 @@ public class RecommendController {
         return list1Service.build(request.lat(), request.lon(), request.time(), radius, pageSize, categories);
     }
 
-    private Mono<List<Map<String, Object>>> handleRecommendationWithCongestion(RecommendRequest request) {
+    private Mono<List<Map<String, Object>>> handleRecommendationWithCongestion(RecommendRequest request, String sessionId, WebSession session) {
         List<String> categories = null;
         if (request.types() != null && !request.types().isEmpty()) {
             categories = request.types().stream().map(type -> switch (type) {
@@ -83,7 +84,12 @@ public class RecommendController {
             sortByEnum = CombinedRecommendationService.SortBy.DISTANCE;
         }
 
-        return combinedService.recommendWithCongestion(request.lat(), request.lon(), request.time(), radius, pageSize, categories, request.congestionDateTime(), sortByEnum);
+        return combinedService.recommendWithCongestion(request.lat(), request.lon(), request.time(), radius, pageSize, categories, request.congestionDateTime(), sortByEnum)
+                .doOnSuccess(data -> {
+                    if (sessionId != null && !sessionId.isEmpty()) {
+                        session.getAttributes().put(sessionId, data);
+                    }
+                });
     }
 
     @GetMapping("/")
@@ -109,19 +115,36 @@ public class RecommendController {
             @RequestParam double lat,
             @RequestParam double lon,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.TIME) LocalTime time,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime congestionDateTime, // 혼잡도 시간 파라미터 추가
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime congestionDateTime,
             @RequestParam(defaultValue = "5000") int radius,
             @RequestParam(defaultValue = "2000") int pageSize,
             @RequestParam(required = false) List<Integer> types,
-            @RequestParam(defaultValue = "distance") String sortBy
+            @RequestParam(defaultValue = "distance") String sortBy,
+            @RequestParam(required = false) String sessionId,
+            WebSession session
     ){
         RecommendRequest request = new RecommendRequest(lat, lon, time, radius, pageSize, types, congestionDateTime, sortBy);
-        return handleRecommendationWithCongestion(request);
+        return handleRecommendationWithCongestion(request, sessionId, session);
     }
 
     @PostMapping("/with-congestion")
-    public Mono<List<Map<String, Object>>> list3PostWithCongestion(@RequestBody RecommendRequest request) {
-        return handleRecommendationWithCongestion(request);
+    public Mono<List<Map<String, Object>>> list3PostWithCongestion(
+            @RequestBody RecommendRequest request,
+            @RequestParam(required = false) String sessionId,
+            WebSession session) {
+        return handleRecommendationWithCongestion(request, sessionId, session);
+    }
+
+    @GetMapping("/result/{sessionId}")
+    public Mono<ResponseEntity<Object>> getResultFromSession(
+            @PathVariable String sessionId,
+            WebSession session) {
+        Object data = session.getAttributes().get(sessionId);
+        if (data != null) {
+            return Mono.just(ResponseEntity.ok(data));
+        } else {
+            return Mono.just(ResponseEntity.notFound().build());
+        }
     }
 
     @GetMapping("/list1-detail")

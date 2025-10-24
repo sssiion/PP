@@ -9,6 +9,7 @@ import com.example.pp.rec.service.ChatOrchestrationService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.WebSession;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
@@ -27,7 +28,7 @@ public class ChatController {
     }
 
     @PostMapping("/chat")
-    public Mono<ServerMessageResponse> handleChat(@RequestBody UserMessageRequest request) { // (1) 반환 타입 Mono로 변경
+    public Mono<ServerMessageResponse> handleChat(@RequestBody UserMessageRequest request, WebSession session) { // WebSession 추가
 
         // (2) [JPA 읽기] - 비동기 래핑
         // JPA(DB) 작업은 블로킹 작업이므로, 별도 스레드에서 실행하도록 격리
@@ -40,8 +41,8 @@ public class ChatController {
         // (3) 비동기 체인 시작
         return contextMono
                 .flatMap(context ->
-                        // (4) 핵심 비동기 로직 호출
-                        orchestrationService.processMessage(context, request.getMessage())
+                        // (4) 핵심 비동기 로직 호출 (request, session 전달)
+                        orchestrationService.processMessage(context, request, session)
                                 .flatMap(response -> // (5) 로직이 끝나면
 
                                         // (6) [JPA 쓰기] - 비동기 래핑

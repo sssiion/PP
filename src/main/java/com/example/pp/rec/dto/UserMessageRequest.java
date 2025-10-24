@@ -3,6 +3,7 @@ package com.example.pp.rec.dto;
 public class UserMessageRequest {
     private String userId;
     private String message;
+    private String sessionId; // 세션 ID 필드 추가
 
     // Getters and Setters
     public String getUserId() {
@@ -16,5 +17,13 @@ public class UserMessageRequest {
     }
     public void setMessage(String message) {
         this.message = message;
+    }
+
+    public String getSessionId() {
+        return sessionId;
+    }
+
+    public void setSessionId(String sessionId) {
+        this.sessionId = sessionId;
     }
 }

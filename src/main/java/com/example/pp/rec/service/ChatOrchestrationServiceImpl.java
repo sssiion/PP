@@ -8,6 +8,7 @@ import com.example.pp.rec.model.model;
 import com.example.pp.rec.protocol.EnrichedPlace;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.WebSession;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers; // Schedulers 임포트
@@ -37,7 +38,10 @@ public class ChatOrchestrationServiceImpl implements ChatOrchestrationService {
     }
 
     @Override
-    public Mono<ServerMessageResponse> processMessage(ChatContext context, String userMessage) {
+    public Mono<ServerMessageResponse> processMessage(ChatContext context, UserMessageRequest request, WebSession session) {
+        String userMessage = request.getMessage();
+        String sessionId = request.getSessionId();
+
         // (0. 맥락 준비 - 동기)
         context.getFullHistory().add("User: " + userMessage);
         context.setTurnCount(context.getTurnCount() + 1);
@@ -49,19 +53,38 @@ public class ChatOrchestrationServiceImpl implements ChatOrchestrationService {
                         context.getTurnCount()
                 )
                 .flatMap(summary -> { // 2. 요약이 끝나면
-                    context.setSummarizedContext(summary); // 요약본 저장
+
+                    // --- 세션 데이터 주입 로직 시작 ---
+                    String finalSummary = summary;
+                    if (sessionId != null && !sessionId.isEmpty()) {
+                        Object recommendationData = session.getAttributes().get(sessionId);
+                        if (recommendationData != null) {
+                            try {
+                                String recommendationJson = objectMapper.writeValueAsString(recommendationData);
+                                // 요약본 앞에 이전 추천 결과 주입
+                                finalSummary = "이전에 사용자에게 다음 장소들을 추천했습니다: " + recommendationJson + "\n\n" + summary;
+
+                            } catch (Exception e) {
+                                System.err.println("세션 데이터 직렬화 실패: " + e.getMessage());
+                                // 실패하더라도 원래 요약본으로 계속 진행
+                            }
+                        }
+                    }
+                    // --- 세션 데이터 주입 로직 끝 ---
+
+                    context.setSummarizedContext(finalSummary); // 강화된 요약본 저장
 
                     // 3. 상태에 따라 비동기 로직 분기
                     Mono<ServerMessageResponse> responseMono;
                     switch (context.getCurrentState()) {
                         case INITIAL:
                         case COLLECTING_DATA:
-                            responseMono = handleDataCollection(context, userMessage, summary);
+                            responseMono = handleDataCollection(context, userMessage, finalSummary);
                             break;
                         case PLACE_QUERY_READY:
                         case RECOMMENDING_PLACE:
                             context.setCurrentState(ChatState.RECOMMENDING_PLACE);
-                            responseMono = handlePlaceRecommendation(context, userMessage, summary);
+                            responseMono = handlePlaceRecommendation(context, userMessage, finalSummary);
                             break;
                         default:
                             responseMono = Mono.just(new ServerMessageResponse("알 수 없는 오류가 발생했습니다."));
