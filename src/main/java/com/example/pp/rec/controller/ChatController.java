@@ -9,6 +9,10 @@ import com.example.pp.rec.service.ChatOrchestrationService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
+
+import java.time.Instant;
 
 
 @RestController
@@ -23,19 +27,31 @@ public class ChatController {
     }
 
     @PostMapping("/chat")
-    public ServerMessageResponse handleChat(@RequestBody UserMessageRequest request) {
+    public Mono<ServerMessageResponse> handleChat(@RequestBody UserMessageRequest request) { // (1) 반환 타입 Mono로 변경
 
-        // 1. 사용자 ID로 기존 ChatContext 로드 (없으면 새로 생성)
-        ChatContext context = contextRepository.findByUserId(request.getUserId())
-                .orElse(new ChatContext(request.getUserId()));
+        // (2) [JPA 읽기] - 비동기 래핑
+        // JPA(DB) 작업은 블로킹 작업이므로, 별도 스레드에서 실행하도록 격리
+        Mono<ChatContext> contextMono = Mono.fromCallable(() ->
+                contextRepository.findByUserId(request.getUserId())
+                        .orElse(new ChatContext(request.getUserId())) // 없으면 새로 생성
+        ).subscribeOn(Schedulers.boundedElastic()); // JPA용 스케줄러 사용
 
-        // 2. 핵심 로직(자동화) 실행
-        ServerMessageResponse response = orchestrationService.processMessage(context, request.getMessage());
 
-        // 3. 변경된 Context (상태, 요약본 등) 저장
-        contextRepository.save(context);
+        // (3) 비동기 체인 시작
+        return contextMono
+                .flatMap(context ->
+                        // (4) 핵심 비동기 로직 호출
+                        orchestrationService.processMessage(context, request.getMessage())
+                                .flatMap(response -> // (5) 로직이 끝나면
 
-        // 4. 사용자에게 응답
-        return response;
+                                        // (6) [JPA 쓰기] - 비동기 래핑
+                                        // context를 DB에 저장하는 것도 블로킹 작업이므로 격리
+                                        Mono.fromCallable(() -> {
+                                            context.setUpdatedAt(Instant.now());
+                                            contextRepository.save(context);
+                                            return response; // 최종 응답(response)을 다음 체인으로 전달
+                                        }).subscribeOn(Schedulers.boundedElastic())
+                                )
+                );
     }
 }

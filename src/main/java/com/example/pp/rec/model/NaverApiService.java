@@ -1,5 +1,7 @@
 package com.example.pp.rec.model;
 
+import reactor.core.publisher.Mono;
+
 import java.util.List;
 
 // Naver API 호출을 전담하는 서비스 인터페이스
@@ -12,7 +14,7 @@ public interface NaverApiService {
      * @param query (예: "강남역 카페")
      * @return Naver API가 반환한 Raw JSON 문자열
      */
-    String searchLocal(String query);
+    Mono<String> searchLocal(String query);
 
     /**
      * Naver 블로그 검색 API (blog.json)를 호출하여
@@ -21,5 +23,5 @@ public interface NaverApiService {
      * @param query (예: "스타벅스 강남점 후기")
      * @return 블로그 description 스니펫(요약글) 목록
      */
-    List<String> searchBlogSnippets(String query);
+    Mono<List<String>> searchBlogSnippets(String query);
 }
