@@ -74,6 +74,24 @@
   ]
   ```
 
+- **결과 정렬 (Sorting)**
+
+  `sortBy` 쿼리 파라미터를 사용하여 추천 결과의 정렬 순서를 지정할 수 있습니다.
+
+  - **`sortBy` 파라미터 옵션**:
+    - `distance` (기본값): 사용자의 현재 위치로부터 가까운 순서대로 정렬합니다.
+    - `congestion`: 예상 혼잡도가 낮은 순서대로 정렬합니다. ('여유' → '보통' → '붐빔'). 혼잡도가 같을 경우 거리순으로 2차 정렬됩니다.
+
+  - **`GET` 요청 예시 (기본값: 거리순 정렬)**:
+    ```bash
+    curl "http://localhost:8082/api/recommend/with-congestion?lat=37.5665&lon=126.9780&time=14:30:00&congestionDateTime=2025-10-24T17:00:00&types=12"
+    ```
+
+  - **`GET` 요청 예시 (혼잡도순 정렬)**:
+    ```bash
+    curl "http://localhost:8082/api/recommend/with-congestion?lat=37.5665&lon=126.9780&time=14:30:00&congestionDateTime=2025-10-24T17:00:00&types=12&sortBy=congestion"
+    ```
+
 #### 1.3. 장소 상세 정보 조회
 
 - **Endpoint**: `/api/recommend/detail/{category}/{id}`

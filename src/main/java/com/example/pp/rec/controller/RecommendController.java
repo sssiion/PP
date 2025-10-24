@@ -32,7 +32,7 @@ public class RecommendController {
     private final CombinedRecommendationService combinedService; // 신규 서비스 주입
 
     // DTO for the main recommendation request
-    public record RecommendRequest(Double lat, Double lon, LocalTime time, Integer radius, Integer pageSize, List<Integer> types, LocalDateTime congestionDateTime) {}
+    public record RecommendRequest(Double lat, Double lon, LocalTime time, Integer radius, Integer pageSize, List<Integer> types, LocalDateTime congestionDateTime, String sortBy) {}
 
     private Mono<List<Map<String, Object>>> handleRecommendation(RecommendRequest request) {
         List<String> categories = null;
@@ -73,11 +73,17 @@ public class RecommendController {
             }).filter(Objects::nonNull).collect(Collectors.toList());
         }
 
-        // Set default values for radius and pageSize if they are null for POST requests
         Integer radius = (request.radius() == null) ? 5000 : request.radius();
         Integer pageSize = (request.pageSize() == null) ? 2000 : request.pageSize();
 
-        return combinedService.recommendWithCongestion(request.lat(), request.lon(), request.time(), radius, pageSize, categories, request.congestionDateTime());
+        CombinedRecommendationService.SortBy sortByEnum;
+        if ("congestion".equalsIgnoreCase(request.sortBy())) {
+            sortByEnum = CombinedRecommendationService.SortBy.CONGESTION;
+        } else {
+            sortByEnum = CombinedRecommendationService.SortBy.DISTANCE;
+        }
+
+        return combinedService.recommendWithCongestion(request.lat(), request.lon(), request.time(), radius, pageSize, categories, request.congestionDateTime(), sortByEnum);
     }
 
     @GetMapping("/")
@@ -89,7 +95,7 @@ public class RecommendController {
             @RequestParam(defaultValue = "2000") int pageSize,
             @RequestParam(required = false) List<Integer> types
     ){
-        RecommendRequest request = new RecommendRequest(lat, lon, time, radius, pageSize, types, null);
+        RecommendRequest request = new RecommendRequest(lat, lon, time, radius, pageSize, types, null, null);
         return handleRecommendation(request);
     }
 
@@ -106,9 +112,10 @@ public class RecommendController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime congestionDateTime, // 혼잡도 시간 파라미터 추가
             @RequestParam(defaultValue = "5000") int radius,
             @RequestParam(defaultValue = "2000") int pageSize,
-            @RequestParam(required = false) List<Integer> types
+            @RequestParam(required = false) List<Integer> types,
+            @RequestParam(defaultValue = "distance") String sortBy
     ){
-        RecommendRequest request = new RecommendRequest(lat, lon, time, radius, pageSize, types, congestionDateTime);
+        RecommendRequest request = new RecommendRequest(lat, lon, time, radius, pageSize, types, congestionDateTime, sortBy);
         return handleRecommendationWithCongestion(request);
     }
 

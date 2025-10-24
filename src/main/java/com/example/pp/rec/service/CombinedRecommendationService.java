@@ -3,6 +3,7 @@ package com.example.pp.rec.service;
 import com.example.pp.rec.dto.CongestionRequestDto;
 import com.example.pp.rec.dto.CongestionResponseDto;
 import com.example.pp.rec.service.list1.list1_orchestrator;
+import com.example.pp.rec.util.Geo;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -12,10 +13,7 @@ import reactor.core.publisher.Mono;
 import java.time.LocalTime;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -26,7 +24,39 @@ public class CombinedRecommendationService {
     private final CongestionService congestionService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    // 정렬 전략을 위한 Enum
+    public enum SortBy {
+        DISTANCE,
+        CONGESTION
+    }
+
+    // 혼잡도 정렬 순서를 정의하는 맵
+    private static final Map<String, Integer> CONGESTION_ORDER = Map.of(
+            "여유", 1,
+            "보통", 2,
+            "약간 붐빔", 3,
+            "붐빔", 4,
+            "정보없음", 5
+    );
+
+    // Main public method that dispatches to the correct sorting strategy
     public Mono<List<Map<String, Object>>> recommendWithCongestion(
+            Double lat, Double lon, LocalTime time, Integer radius, Integer pageSize, List<String> categories, LocalDateTime congestionDateTime, SortBy sortBy) {
+
+        return getEnrichedAndFlattenedPlaces(lat, lon, time, radius, pageSize, categories, congestionDateTime)
+                .map(places -> {
+                    Comparator<Map<String, Object>> comparator = switch (sortBy) {
+                        case CONGESTION -> Comparator
+                                .comparing((Map<String, Object> place) -> CONGESTION_ORDER.getOrDefault(place.get("congestionLevel"), 5))
+                                .thenComparing(place -> (Double) place.get("distance"));
+                        case DISTANCE -> Comparator.comparing(place -> (Double) place.get("distance"));
+                    };
+                    return places.stream().sorted(comparator).collect(Collectors.toList());
+                });
+    }
+
+
+    private Mono<List<Map<String, Object>>> getEnrichedAndFlattenedPlaces(
             Double lat, Double lon, LocalTime time, Integer radius, Integer pageSize, List<String> categories, LocalDateTime congestionDateTime) {
 
         return list1Service.build(lat, lon, time, radius, pageSize, categories)
@@ -35,32 +65,41 @@ public class CombinedRecommendationService {
                         return Mono.just(new ArrayList<>());
                     }
 
-                    // 1. 추천 결과(객체 리스트)를 순회하며 혼잡도 요청 DTO 생성
-                    List<CongestionRequestDto> congestionRequests = new ArrayList<>();
-                    for (Map<String, Object> seedGroup : recommendations) {
+                    List<Map<String, Object>> flattenedPlaces = new ArrayList<>();
+                    recommendations.forEach(seedGroup -> {
                         Map<String, List<?>> results = (Map<String, List<?>>) seedGroup.get("results");
-                        if (results == null) continue;
+                        if (results != null) {
+                            results.values().forEach(places -> {
+                                places.forEach(placeObj -> {
+                                    Map<String, Object> placeMap = objectMapper.convertValue(placeObj, new TypeReference<>() {});
+                                    flattenedPlaces.add(placeMap);
+                                });
+                            });
+                        }
+                    });
 
-                        for (List<?> places : results.values()) {
-                            for (Object placeObj : places) {
-                                Map<String, Object> placeMap = objectMapper.convertValue(placeObj, new TypeReference<>() {});
+                    if (flattenedPlaces.isEmpty()) {
+                        return Mono.just(new ArrayList<>());
+                    }
+
+                    List<CongestionRequestDto> congestionRequests = flattenedPlaces.stream()
+                            .map(placeMap -> {
                                 Object placeLat = placeMap.get("latitude");
                                 Object placeLon = placeMap.get("longitude");
                                 if (placeLat != null && placeLon != null) {
-                                    congestionRequests.add(new CongestionRequestDto(
+                                    return new CongestionRequestDto(
                                             Double.valueOf(placeLat.toString()),
                                             Double.valueOf(placeLon.toString()),
                                             congestionDateTime.format(DateTimeFormatter.ISO_DATE_TIME)
-                                    ));
+                                    );
                                 }
-                            }
-                        }
-                    }
+                                return null;
+                            })
+                            .filter(Objects::nonNull)
+                            .collect(Collectors.toList());
 
-                    // 2. 혼잡도 API 호출
                     return congestionService.getCongestion(congestionRequests)
                             .map(congestionResponse -> {
-                                // 3. 빠른 조회를 위해 혼잡도 결과를 Map으로 변환
                                 Map<String, String> congestionMap = congestionResponse.stream()
                                         .collect(Collectors.toMap(
                                                 res -> res.getLatitude() + "," + res.getLongitude(),
@@ -68,43 +107,32 @@ public class CombinedRecommendationService {
                                                 (level1, level2) -> level1
                                         ));
 
-                                // 4. 최종 결과를 담을 새로운 List 생성
-                                List<Map<String, Object>> newRecommendations = new ArrayList<>();
+                                flattenedPlaces.forEach(placeMap -> {
+                                    Object placeLatObj = placeMap.get("latitude");
+                                    Object placeLonObj = placeMap.get("longitude");
+                                    String congestionLevel = "정보없음";
+                                    double distanceKm = -1.0;
 
-                                // 5. 기존 추천 결과를 순회하며 새로운 데이터 구조 조립
-                                for (Map<String, Object> seedGroup : recommendations) {
-                                    Map<String, Object> newSeedGroup = new LinkedHashMap<>(seedGroup);
-                                    Map<String, List<?>> results = (Map<String, List<?>>) newSeedGroup.get("results");
-                                    if (results == null) {
-                                        newRecommendations.add(newSeedGroup);
-                                        continue;
-                                    }
+                                    if (placeLatObj != null && placeLonObj != null) {
+                                        String placeLatStr = placeLatObj.toString();
+                                        String placeLonStr = placeLonObj.toString();
+                                        String key = placeLatStr + "," + placeLonStr;
+                                        congestionLevel = congestionMap.getOrDefault(key, "정보없음");
 
-                                    Map<String, List<Map<String, Object>>> newResults = new LinkedHashMap<>();
-                                    for (Map.Entry<String, List<?>> entry : results.entrySet()) {
-                                        String category = entry.getKey();
-                                        List<?> places = entry.getValue();
-
-                                        List<Map<String, Object>> newPlaces = new ArrayList<>();
-                                        for (Object placeObj : places) {
-                                            // 장소 객체를 Map으로 변환
-                                            Map<String, Object> placeMap = objectMapper.convertValue(placeObj, new TypeReference<>() {});
-
-                                            // 혼잡도 정보 찾아서 추가
-                                            Object placeLat = placeMap.get("latitude");
-                                            Object placeLon = placeMap.get("longitude");
-                                            String key = (placeLat != null && placeLon != null) ? placeLat.toString() + "," + placeLon.toString() : null;
-                                            String congestionLevel = (key != null) ? congestionMap.getOrDefault(key, "") : "";
-                                            placeMap.put("congestionLevel", congestionLevel);
-
-                                            newPlaces.add(placeMap);
+                                        try {
+                                            double placeLat = Double.parseDouble(placeLatStr);
+                                            double placeLon = Double.parseDouble(placeLonStr);
+                                            double distanceMeters = Geo.haversineMeters(lat, lon, placeLat, placeLon);
+                                            distanceKm = Math.round((distanceMeters / 1000.0) * 100.0) / 100.0; // km, 소수점 둘째 자리
+                                        } catch (NumberFormatException e) {
+                                            // 파싱 실패 시 거리는 -1.0으로 유지
                                         }
-                                        newResults.put(category, newPlaces);
                                     }
-                                    newSeedGroup.put("results", newResults);
-                                    newRecommendations.add(newSeedGroup);
-                                }
-                                return newRecommendations;
+                                    placeMap.put("congestionLevel", congestionLevel);
+                                    placeMap.put("distance", distanceKm);
+                                });
+
+                                return flattenedPlaces;
                             });
                 });
     }
