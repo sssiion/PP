@@ -1,5 +1,6 @@
 package com.example.pp.rec.controller;
 
+import com.example.pp.auth.SessionUser;
 import com.example.pp.data.service.DetailService;
 import com.example.pp.rec.dto.List1UserResponse;
 import com.example.pp.rec.service.CombinedRecommendationService;
@@ -58,7 +59,7 @@ public class RecommendController {
         return list1Service.build(request.lat(), request.lon(), request.time(), radius, pageSize, categories);
     }
 
-    private Mono<List<Map<String, Object>>> handleRecommendationWithCongestion(RecommendRequest request, String sessionId, WebSession session) {
+    private Mono<List<Map<String, Object>>> handleRecommendationWithCongestion(RecommendRequest request, String requestSessionId, SessionUser sessionUser, WebSession session) {
         List<String> categories = null;
         if (request.types() != null && !request.types().isEmpty()) {
             categories = request.types().stream().map(type -> switch (type) {
@@ -84,10 +85,12 @@ public class RecommendController {
             sortByEnum = CombinedRecommendationService.SortBy.DISTANCE;
         }
 
+        String effectiveSessionId = (sessionUser != null) ? sessionUser.getProviderId() : requestSessionId;
+
         return combinedService.recommendWithCongestion(request.lat(), request.lon(), request.time(), radius, pageSize, categories, request.congestionDateTime(), sortByEnum)
                 .doOnSuccess(data -> {
-                    if (sessionId != null && !sessionId.isEmpty()) {
-                        session.getAttributes().put(sessionId, data);
+                    if (effectiveSessionId != null && !effectiveSessionId.isEmpty()) {
+                        session.getAttributes().put(effectiveSessionId, data);
                     }
                 });
     }
@@ -121,18 +124,20 @@ public class RecommendController {
             @RequestParam(required = false) List<Integer> types,
             @RequestParam(defaultValue = "distance") String sortBy,
             @RequestParam(required = false) String sessionId,
+            @SessionAttribute(name = "user", required = false) SessionUser sessionUser,
             WebSession session
     ){
         RecommendRequest request = new RecommendRequest(lat, lon, time, radius, pageSize, types, congestionDateTime, sortBy);
-        return handleRecommendationWithCongestion(request, sessionId, session);
+        return handleRecommendationWithCongestion(request, sessionId, sessionUser, session);
     }
 
     @PostMapping("/with-congestion")
     public Mono<List<Map<String, Object>>> list3PostWithCongestion(
             @RequestBody RecommendRequest request,
             @RequestParam(required = false) String sessionId,
+            @SessionAttribute(name = "user", required = false) SessionUser sessionUser,
             WebSession session) {
-        return handleRecommendationWithCongestion(request, sessionId, session);
+        return handleRecommendationWithCongestion(request, sessionId, sessionUser, session);
     }
 
     @GetMapping("/result/{sessionId}")

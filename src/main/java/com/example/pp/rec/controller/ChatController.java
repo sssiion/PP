@@ -1,6 +1,7 @@
 package com.example.pp.rec.controller;
 
 
+import com.example.pp.auth.SessionUser;
 import com.example.pp.rec.dto.ServerMessageResponse;
 import com.example.pp.rec.dto.UserMessageRequest;
 import com.example.pp.rec.entity.ChatContext;
@@ -9,6 +10,7 @@ import com.example.pp.rec.service.ChatOrchestrationService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.SessionAttribute;
 import org.springframework.web.server.WebSession;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -28,7 +30,12 @@ public class ChatController {
     }
 
     @PostMapping("/chat")
-    public Mono<ServerMessageResponse> handleChat(@RequestBody UserMessageRequest request, WebSession session) { // WebSession 추가
+    public Mono<ServerMessageResponse> handleChat(@RequestBody UserMessageRequest request, WebSession session, @SessionAttribute(name = "user", required = false) SessionUser sessionUser) { // WebSession, SessionUser 추가
+
+        // 로그인한 사용자의 경우, 요청의 sessionId를 사용자의 providerId로 설정
+        if (sessionUser != null) {
+            request.setSessionId(sessionUser.getProviderId());
+        }
 
         // (2) [JPA 읽기] - 비동기 래핑
         // JPA(DB) 작업은 블로킹 작업이므로, 별도 스레드에서 실행하도록 격리

@@ -121,20 +121,54 @@ AI 기반의 대화형 인터페이스를 제공합니다.
 - **설명**: 사용자의 메시지를 받아 대화의 맥락을 유지하며 응답을 생성합니다. `sessionId`를 함께 전달하면, 이전에 추천받은 장소 정보를 AI가 인지하고 대화에 활용할 수 있습니다.
 
 - **요청 본문**:
-  - `userId` (String, 필수): 사용자를 식별하는 고유 ID.
+  - `userId` (String, 필수): 사용자를 식별하는 고유 ID. 채팅 내역(`ChatContext`)을 관리하는 데 사용됩니다.
   - `message` (String, 필수): 사용자가 입력한 메시지.
-  - `sessionId` (String, 선택): 참고할 추천 결과가 저장된 세션 ID.
+  - `sessionId` (String, 선택): 참고할 추천 결과가 저장된 세션 ID. (세션 관리 정책은 아래 `사용자 식별 및 세션 관리` 참고)
 
-- **요청 예시**:
+#### 사용자 식별 및 세션 관리
+
+채팅 API는 로그인 상태와 관계없이 사용할 수 있으며, 사용자를 구분하는 방식에 차이가 있습니다.
+
+**1. 로그인 사용자 (Logged-in User)**
+
+- **개요**: OAuth2를 통해 로그인한 사용자는 서버가 세션 쿠키를 통해 자동으로 식별합니다.
+- **`userId` 설정**: 채팅 내역 관리를 위해 `userId`를 보내야 합니다. 이 값은 로그인 시 발급받는 사용자의 고유 ID, 즉 **`providerId`**를 사용하기를 **강력히 권장**합니다.
+- **`sessionId` 설정**: 로그인한 사용자의 경우, 서버는 내부적으로 `providerId`를 세션 ID로 사용합니다. 따라서 요청 시 `sessionId` 필드를 보내더라도 **서버는 이 값을 무시**합니다. 추천 결과는 자동으로 해당 유저의 세션에 귀속됩니다.
+
+**2. 게스트 사용자 (Guest User)**
+
+- **개요**: 로그인하지 않은 사용자는 클라이언트(프론트엔드)에서 고유 ID를 생성하고 관리해야 합니다.
+- **`userId` 및 `sessionId` 설정**:
+  - 클라이언트는 사용자를 식별할 수 있는 고유한 ID(예: UUID)를 생성해야 합니다.
+  - `/chat` API 호출 시, 생성한 ID를 **`userId`와 `sessionId` 두 필드에 모두 동일한 값**으로 설정하여 보내야 합니다.
+  - **예시**: `"userId": "guest-d5a7-469a-b1c3-1e2f3a4b5c6d"`, `"sessionId": "guest-d5a7-469a-b1c3-1e2f3a4b5c6d"`
+  - 이렇게 ID를 통일해야 게스트 사용자의 채팅 내역과 추천 결과가 올바르게 연결됩니다.
+
+- **요청 예시 (게스트)**:
   ```bash
+  # 게스트 사용자를 위해 클라이언트에서 생성한 UUID를 userId와 sessionId에 동일하게 사용
   curl -X POST http://localhost:8082/chat \
        -H "Content-Type: application/json" \
        -b "cookies.txt" \
        -d 
              {
-               "userId": "user-123",
-               "message": "아까 추천해준 곳들 다시 알려줄래?",
-               "sessionId": "user1-query1"
+               "userId": "guest-uuid-12345",
+               "message": "강남역 근처 맛집 추천해줘",
+               "sessionId": "guest-uuid-12345"
+             }
+  ```
+
+- **요청 예시 (로그인 사용자)**:
+  ```bash
+  # 로그인 사용자는 발급받은 providerId를 userId로 사용
+  # sessionId는 보내지 않거나, 보내더라도 서버에서 무시됨
+  curl -X POST http://localhost:8082/chat \
+       -H "Content-Type: application/json" \
+       -b "cookies.txt" \
+       -d 
+             {
+               "userId": "1234567890" # 사용자의 providerId
+               "message": "아까 추천해준 곳들 다시 알려줄래?"
              }
   ```
   * `-b "cookies.txt"`: 세션 유지를 위해 쿠키 파일을 사용합니다.
