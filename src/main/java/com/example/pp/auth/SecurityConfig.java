@@ -36,7 +36,7 @@ public class SecurityConfig {
                 .authorizeExchange(authorize -> authorize
                         .anyExchange().permitAll()
                 )
-                .logout(logout -> logout.logoutUrl("/")) // Simplified logout
+                .logout(logout -> logout.logoutUrl("/logout")) // Standardized logout URL
                 .oauth2Login(oauth2 -> oauth2
                         .authenticationSuccessHandler((webFilterExchange, authentication) -> {
                             OAuth2AuthenticationToken token = (OAuth2AuthenticationToken) authentication;
