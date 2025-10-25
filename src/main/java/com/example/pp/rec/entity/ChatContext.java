@@ -3,7 +3,6 @@ package com.example.pp.rec.entity;
 
 import com.example.pp.rec.config.ListToStringConverter;
 import com.example.pp.rec.config.MapToStringConverter;
-import com.example.pp.rec.dto.ChatState;
 
 import jakarta.persistence.*; // (JPA 임포트)
 import jakarta.persistence.Column; // jakarta.persistence.* 임포트
