@@ -23,67 +23,83 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-
+// com/example/pp/chat/service/chatservice/ChatFlowService.java
 @Service
 @RequiredArgsConstructor
 public class ChatFlowService {
     private final KakaoLocalClient kakao;
-    private final CongestionService congestionService; // 제공 코드 사용
+    private final CongestionService congestionService;
     private final PlaceStore placeStore;
 
     public Mono<ServerMessageResponse> runPipeline(UserMessageRequest req, WebSession session) {
         String sessionId = Optional.ofNullable(req.getSessionId()).filter(s->!s.isBlank()).orElse(UUID.randomUUID().toString());
         String raw = Optional.ofNullable(req.getMessage()).orElse("").trim();
 
-        // 1) 좌표 확보: 우선 req.lat/lon -> 없으면 지명 추출 후 geocode
-        return ensureCoordinates(raw, req.getLat(), req.getLon())
+        return ensureCoordinatesWithFallback(raw, req.getLat(), req.getLon())
                 .switchIfEmpty(Mono.error(new IllegalStateException("NEED_LOCATION")))
                 .flatMap(coord -> {
                     double lat = coord.getT1();
                     double lon = coord.getT2();
-
-                    // 2) 질의 정제
                     String query = normalizeQuery(raw);
 
-                    // 3) Kakao 키워드 검색(p1,p2)로 후보 30 수집
                     return kakao.searchKeywordPaged(query, lat, lon, 5000)
                             .map(docs -> toPlaceBasics(docs, lat, lon))
-                            .flatMap(basics -> {
-                                // 4) 새 장소 위경도 즉시 저장
-                                return placeStore.savePlacesBasic(sessionId, basics).thenReturn(basics);
-                            })
+                            .flatMap(basics -> placeStore.savePlacesBasic(sessionId, basics).thenReturn(basics))
                             .flatMap(basics -> {
                                 if (basics.isEmpty()) return Mono.just(List.<PlaceWithCongestion>of());
-                                // 5) 혼잡도 배치 호출
+                                String isoNow = DateTimeFormatter.ISO_DATE_TIME.format(LocalDateTime.now());
                                 List<CongestionRequestDto> reqs = basics.stream()
-                                        .map(p -> new CongestionRequestDto(p.getLat(), p.getLon(),
-                                                DateTimeFormatter.ISO_DATE_TIME.format(LocalDateTime.now())))
+                                        .map(p -> new CongestionRequestDto(p.getLat(), p.getLon(), isoNow))
                                         .toList();
                                 return congestionService.getCongestion(reqs)
-                                        .map(congList -> mergeCongestion(basics, congList));
+                                        .map(cong -> mergeCongestion(basics, cong));
                             })
                             .flatMap(withCongestion -> {
-                                // 6) 정렬(혼잡도→거리), Top5
                                 List<PlaceWithCongestion> top5 = sortAndPick(withCongestion);
                                 session.getAttributes().put(sessionId, top5);
-                                // 7) 세션 저장 및 응답
                                 return placeStore.savePlacesWithCongestion(sessionId, top5)
                                         .thenReturn(ServerMessageResponse.ok("추천 결과를 정리했어요.", List.of(), List.of(), toRecommendedPlaces(top5)));
-                            })
-                            .onErrorResume(e -> {
-                                if ("NEED_LOCATION".equals(e.getMessage())) {
-                                    return Mono.just(ServerMessageResponse.text("좌표가 없어요. ‘강남역’, ‘홍대입구역’ 같은 기준 위치를 말하거나 현재 위치를 공유해 주세요."));
-                                }
-                                return Mono.just(ServerMessageResponse.error("일시적 오류가 발생했어요. 잠시 후 다시 시도해주세요."));
                             });
+                })
+                .onErrorResume(ex -> {
+                    if ("NEED_LOCATION".equals(ex.getMessage())) {
+                        return Mono.just(ServerMessageResponse.text("좌표가 없어요. [translate:홍대입구역], [translate:강남역] 같은 기준 위치를 말하거나 현재 위치를 공유해 주세요."));
+                    }
+                    return Mono.just(ServerMessageResponse.error("일시적 오류가 발생했어요. 잠시 후 다시 시도해주세요."));
                 });
     }
 
-    private String normalizeQuery(String raw) {
-        if (raw.isBlank()) return "카페";
-        return raw;
+    private Mono<Tuple2<Double,Double>> ensureCoordinatesWithFallback(String message, Double lat, Double lon) {
+        if (lat!=null && lon!=null) return Mono.just(Tuples.of(lat, lon));
+        String place = extractPlace(message);
+        if (place!=null && !place.isBlank()) {
+            // 1차: 주소 지오코딩
+            return kakao.geocodeAddress(place)
+                    .flatMap(list -> {
+                        if (!list.isEmpty()) {
+                            Map<String,Object> first = list.get(0);
+                            double y = parseDouble(first.get("y"));
+                            double x = parseDouble(first.get("x"));
+                            if (y!=0.0 || x!=0.0) return Mono.just(Tuples.of(y, x));
+                        }
+                        // 2차 폴백: 키워드 검색 1건으로 좌표 확보
+                        return kakao.searchKeywordPaged(place, 37.5665, 126.9780, 20000) // 서울시청을 임시 중심
+                                .map(docs -> {
+                                    return docs.stream().findFirst()
+                                            .map(doc -> Tuples.of(parseDouble(doc.get("y")), parseDouble(doc.get("x"))))
+                                            .orElse(null);
+                                })
+                                .flatMap(coord -> coord != null ? Mono.just(coord) : Mono.empty());
+                    });
+        }
+        return Mono.empty();
     }
 
+    private String normalizeQuery(String raw) {
+        return raw.isBlank() ? "카페" : raw;
+    }
+
+    @SuppressWarnings("unchecked")
     private List<PlaceBasic> toPlaceBasics(List<Map<String,Object>> docs, double userLat, double userLon) {
         return docs.stream().map(d -> {
                     String id = String.valueOf(d.get("id"));
@@ -91,7 +107,8 @@ public class ChatFlowService {
                     String addr = String.valueOf(d.getOrDefault("road_address_name", d.getOrDefault("address_name","")));
                     double lon = parseDouble(d.get("x"));
                     double lat = parseDouble(d.get("y"));
-                    double km = computeDistanceKm(userLat, userLon, lat, lon, String.valueOf(d.getOrDefault("distance","")));
+                    String dist = String.valueOf(d.getOrDefault("distance",""));
+                    double km = computeDistanceKm(userLat, userLon, lat, lon, dist);
                     return new PlaceBasic(id, name, lat, lon, addr, km);
                 }).sorted(Comparator.comparingDouble(PlaceBasic::getDistanceKm))
                 .limit(30)
@@ -99,7 +116,7 @@ public class ChatFlowService {
     }
 
     private double computeDistanceKm(double userLat, double userLon, double lat, double lon, String kakaoDistanceMeters) {
-        if (kakaoDistanceMeters!=null && !kakaoDistanceMeters.isBlank() && kakaoDistanceMeters.matches("\\d+")) {
+        if (kakaoDistanceMeters!=null && kakaoDistanceMeters.matches("\\d+")) {
             return Math.round((Integer.parseInt(kakaoDistanceMeters) / 1000.0) * 100.0)/100.0;
         }
         double meters = Geo.haversineMeters(userLat, userLon, lat, lon);
@@ -108,15 +125,18 @@ public class ChatFlowService {
 
     private List<PlaceWithCongestion> mergeCongestion(List<PlaceBasic> basics, List<CongestionResponseDto> cong) {
         Map<String, String> byKey = cong.stream().collect(Collectors.toMap(
-                c -> c.getLatitude()+","+c.getLongitude(),
+                c -> fixedKey(c.getLatitude(), c.getLongitude()),
                 CongestionResponseDto::getCongestionLevel,
                 (a,b)->a
         ));
         return basics.stream().map(p -> {
-            String key = p.getLat()+","+p.getLon();
-            String level = byKey.getOrDefault(key, "정보없음");
+            String level = byKey.getOrDefault(fixedKey(p.getLat(), p.getLon()), "정보없음");
             return new PlaceWithCongestion(p.getId(), p.getName(), p.getLat(), p.getLon(), p.getAddress(), p.getDistanceKm(), level);
         }).toList();
+    }
+
+    private String fixedKey(double lat, double lon) {
+        return String.format(Locale.ROOT, "%.6f,%.6f", lat, lon);
     }
 
     private List<PlaceWithCongestion> sortAndPick(List<PlaceWithCongestion> list) {
@@ -129,24 +149,10 @@ public class ChatFlowService {
                 .toList();
     }
 
-    private Mono<Tuple2<Double,Double>> ensureCoordinates(String message, Double lat, Double lon) {
-        if (lat!=null && lon!=null) return Mono.just(Tuples.of(lat, lon));
-        String place = extractPlace(message);
-        if (place==null || place.isBlank()) return Mono.empty();
-        return kakao.geocodeAddress(place)
-                .flatMap(list -> {
-                    if (list.isEmpty()) return Mono.empty();
-                    Map<String,Object> first = list.get(0);
-                    double y = parseDouble(first.getOrDefault("y", "0"));
-                    double x = parseDouble(first.getOrDefault("x", "0"));
-                    if (y==0.0 && x==0.0) return Mono.empty();
-                    return Mono.just(Tuples.of(y, x));
-                });
-    }
-
     private String extractPlace(String m) {
         if (m==null) return null;
-        Matcher pm = Pattern.compile("([가-힣A-Za-z0-9]+(역|동|구|시|군|면))").matcher(m);
+        // 접미사 없는 지명도 일부 허용 (+ 기존 패턴)
+        Matcher pm = Pattern.compile("([가-힣A-Za-z0-9]+(?:역|동|구|시|군|면)?)").matcher(m);
         if (pm.find()) return pm.group(1);
         return null;
     }

@@ -13,7 +13,7 @@ import org.springframework.web.server.WebSession;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.UUID;
+import java.util.UUID;// com/example/pp/chat/controller/ChatController.java
 @RestController
 @RequestMapping("/api/chat")
 @RequiredArgsConstructor
@@ -22,23 +22,12 @@ public class ChatController {
 
     @PostMapping
     public Mono<ServerMessageResponse> chat(@RequestBody UserMessageRequest req, WebSession session) {
-        return flow.runPipeline(req, session);
-    }
-
-    @GetMapping("/result/{sessionId}")
-    public Mono<List<RecommendedPlace>> result(@PathVariable String sessionId, WebSession session, PlaceStore placeStore) {
-        @SuppressWarnings("unchecked")
-        List<RecommendedPlace> inSession = (List<RecommendedPlace>) session.getAttributes().get(sessionId);
-        if (inSession != null) return Mono.just(inSession);
-        return placeStore.loadSessionResult(sessionId).map(list ->
-                list.stream().map(s -> {
-                    RecommendedPlace r = new RecommendedPlace();
-                    r.setId(s.getId()); r.setName(s.getName());
-                    r.setAddress(s.getAddress());
-                    r.setLatitude(s.getLat()); r.setLongitude(s.getLon());
-                    r.setCongestionLevel(s.getCongestionLevel());
-                    r.setDistance(s.getDistanceKm());
-                    return r;
-                }).toList());
+        return flow.runPipeline(req, session)
+                .onErrorResume(ex -> {
+                    if ("NEED_LOCATION".equals(ex.getMessage())) {
+                        return Mono.just(ServerMessageResponse.text("좌표가 없어요. [translate:홍대입구역], [translate:강남역] 같은 기준 위치를 말하거나 현재 위치를 공유해 주세요."));
+                    }
+                    return Mono.just(ServerMessageResponse.error("일시적 오류가 발생했어요. 잠시 후 다시 시도해주세요."));
+                });
     }
 }
