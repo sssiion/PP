@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "properties": {
+    "category": { "type": ["string", "null"] },
+    "mood": { "type": ["string", "null"] },
+    "price": { "type": ["string", "null"], "enum": ["저렴", "중간", "비쌈", null] },
+    "distance": { "type": ["string", "null"], "enum": ["가까움", "보통", "멀음", null] },
+    "time": { "type": ["string", "null"] }
+  },
+  "additionalProperties": false
+}

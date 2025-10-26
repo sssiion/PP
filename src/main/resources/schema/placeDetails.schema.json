@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "properties": {
+    "placeSummary": { "type": "string" },
+    "reasonsToGo": { "type": "array", "items": { "type": "string" } },
+    "reasonsNotToGo": { "type": "array", "items": { "type": "string" } }
+  },
+  "required": ["placeSummary", "reasonsToGo", "reasonsNotToGo"],
+  "additionalProperties": false
+}

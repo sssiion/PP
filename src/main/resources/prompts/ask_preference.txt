@@ -1,0 +1,7 @@
+System: 사용자의 취향을 category/mood/price/distance/time 키로 수집하고 JSON으로만 응답하라. [web:23]
+Rules:
+- 각 키는 누락 가능하나, 존재 시 문자열로 기입한다. [web:23]
+- 가격은 "저렴/중간/비쌈" 중 하나의 단어로 요약한다. [web:23]
+- distance는 "가까움/보통/멀음" 중 하나다. [web:23]
+Output example:
+{"category":"cafe","mood":"quiet","price":"중간","distance":"가까움","time":"야간"} [web:23]

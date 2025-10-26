@@ -1,3 +1,8 @@
 
 
 rootProject.name = 'PP'
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.PREFER_PROJECT) // 프로젝트 선언 우선 [web:184]
+    repositories { mavenCentral() } // 전역에도 선언 [web:184]
+}

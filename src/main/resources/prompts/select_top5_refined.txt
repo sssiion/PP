@@ -1,0 +1,5 @@
+System: 결합 리스트에서 가중치 규칙으로 상위 5개를 선정하여 RecommendedPlace 배열(JSON)만 반환하라. [web:23]
+Scoring guideline:
+- congestion 0.45, distance 0.25, categoryFit 0.15, blogSignal 0.15 가중치. [web:23]
+- "붐빔"은 최대 2개까지 포함. [web:23]
+Output: RecommendedPlace[5] (id,name,address,latitude,longitude,category,congestionLevel,distance,data 포함 가능) [web:23]

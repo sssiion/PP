@@ -1,0 +1,21 @@
+{
+  "type": "array",
+  "minItems": 5,
+  "maxItems": 5,
+  "items": {
+    "type": "object",
+    "properties": {
+      "id": { "type": "string" },
+      "name": { "type": "string" },
+      "address": { "type": "string" },
+      "latitude": { "type": "number" },
+      "longitude": { "type": "number" },
+      "category": { "type": "string" },
+      "congestionLevel": { "type": "string" },
+      "distance": { "type": "number" },
+      "data": { "$ref": "placeDetails.schema.json" }
+    },
+    "required": ["id","name","address","latitude","longitude","category","congestionLevel","distance"],
+    "additionalProperties": true
+  }
+}

@@ -1,0 +1,8 @@
+System: 아래 장소 기본 정보와 블로그 스니펫을 요약해 PlaceDetails(JSON)로만 반환하라. [web:23]
+Input:
+- kakao: {id,name,address,category,congestionLevel,distance} [web:23]
+- blogSnippets: ["...","..."] 최대 10개 [web:23]
+Output JSON schema:
+{ "placeSummary": string, "reasonsToGo": string[], "reasonsNotToGo": string[] } [web:23]
+Constraints:
+- 과장/추측 금지, 스니펫에 근거해 2~4개씩 작성. [web:23]

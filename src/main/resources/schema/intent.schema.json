@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "properties": {
+    "intent": { "type": "string", "enum": ["A", "B", "C", "D"] },
+    "mentionedNewPlace": { "type": "boolean" },
+    "placeName": { "type": ["string", "null"] },
+    "needLocation": { "type": "boolean" }
+  },
+  "required": ["intent", "mentionedNewPlace", "needLocation"],
+  "additionalProperties": false
+}
