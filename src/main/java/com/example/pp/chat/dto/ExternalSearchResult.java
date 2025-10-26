@@ -9,4 +9,3 @@ public class ExternalSearchResult {
     private List<RecommendedPlace> places = new ArrayList<>();
     private List<BlogReview> blogs = new ArrayList<>();
 }
-

@@ -1,10 +1,7 @@
 package com.example.pp.chat.service.chatservice;
 
 
-import com.example.pp.chat.dto.PlaceDetails;
-import com.example.pp.chat.dto.RecommendedPlace;
-import com.example.pp.chat.dto.ServerMessageResponse;
-import com.example.pp.chat.dto.UserMessageRequest;
+import com.example.pp.chat.dto.*;
 import com.example.pp.chat.entity.ChatContext;
 import com.example.pp.chat.entity.ChatState;
 import com.example.pp.chat.mapper.PlaceMapper;
@@ -48,13 +45,41 @@ public class ChatService {
             Pattern.compile("([가-힣A-Za-z0-9]+(?:역|동|구|시|군|면))");
 
     public Mono<ServerMessageResponse> processChatRequest(UserMessageRequest req, WebSession session){
-        return loadOrInitContext(req)
-                .map(ctx -> { extractAndMemoEntities(ctx, req.getMessage()); return ctx; })
-                .flatMap(ctx -> {
-                    ServerMessageResponse quick = quickReaction(req, ctx);
-                    return placeFlow(ctx, req, session)
-                            .onErrorResume(ex -> fallbackNeedLocationOrGeneric(ex, req, session))
-                            .defaultIfEmpty(quick);
+        // 1. AI 의도+엔티티 구조화
+        return ai.parseIntentAndEntities(req.getMessage(), session)
+                .flatMap(parsed -> {
+                    // 2. 정보 미충분 → 추가 질문 (무한루프방지/필수info 체크)
+                    if (!parsed.isReady()) {
+                        return Mono.just(ServerMessageResponse.text(parsed.getAskWhatIsMissing()));
+                    }
+                    // 3. 충분(장소,키워드 등) → API 파라미터 분리해서 검색
+                    return callExternalApis(parsed)
+                            // 4. 결과를 AI 종합요약 후 사용자에게 보여줌
+                            .flatMap(extResult -> ai.summarizePlacesAndBlogs(parsed, extResult)
+                                    .map(ServerMessageResponse::text));
+                });
+    }
+    private Mono<ExternalSearchResult> callExternalApis(ParsedIntent intent) {
+        double lat = intent.getLat()!=null ? intent.getLat() : 0.0;
+        double lon = intent.getLon()!=null ? intent.getLon() : 0.0;
+        int radius = intent.getRadius()!=null ? intent.getRadius() : 3000;
+        String key = String.join(" ",
+                intent.getPlaceName()==null?"":intent.getPlaceName(),
+                String.join(" ", intent.getKeywords()==null?List.of():intent.getKeywords())
+        );
+        Mono<List<RecommendedPlace>> kakaoMono
+                = kakao.searchByKeyword(key, lat, lon, 10, radius)
+                .map(PlaceMapper::fromKakaoDocuments).onErrorReturn(List.of());
+        Mono<List<BlogReview>> blogMono
+                = naver.searchBlogReviewsAsParsed(key, 5, 1, "sim")
+                .onErrorReturn(List.of());
+
+        return Mono.zip(kakaoMono, blogMono)
+                .map(zip -> {
+                    ExternalSearchResult ext = new ExternalSearchResult();
+                    ext.setPlaces(zip.getT1());
+                    ext.setBlogs(zip.getT2());
+                    return ext;
                 });
     }
 
