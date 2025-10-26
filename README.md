@@ -2,15 +2,100 @@
 
 ---
 
-## API Usage Guide (v2025.10.24)
+## API Usage Guide (v2025.10.26)
 
 이 문서는 PP 프로젝트 백엔드 API의 최신 사용 방법을 안내합니다.
 
-### 1. 추천 API (`/api/recommend`)
+### 1. 경로 추천 API (`/api/route`)
+
+경로 추천 API는 출발지와 도착지, 그리고 정렬 기준을 바탕으로 최적의 경로를 추천합니다.
+
+#### Endpoint
+
+```
+POST /api/route
+```
+
+#### 요청 (Request)
+
+##### 요청 본문 (Request Body)
+
+요청 본문은 다음과 같은 필드를 포함하는 JSON 객체입니다.
+
+| 필드            | 타입     | 설명                                                                    | 필수 |
+| --------------- | -------- | ----------------------------------------------------------------------- | ---- |
+| `startX`        | `number` | 출발지 경도 (예: `126.9780`)                                            | 예   |
+| `startY`        | `number` | 출발지 위도 (예: `37.5665`)                                             | 예   |
+| `endX`          | `number` | 도착지 경도 (예: `127.0276`)                                            | 예   |
+| `endY`          | `number` | 도착지 위도 (예: `37.4979`)                                             | 예   |
+| `sort`          | `string` | 정렬 기준. `"congestion"` (혼잡도순) 또는 `"duration"` (소요 시간순). | 아니요 |
+| `departureTime` | `string` | 출발 시각. ISO-8601 형식 (예: `"2025-10-27T10:00:00"`)                  | 아니요 |
+
+##### `curl` 요청 예시
+
+```bash
+curl -X POST http://localhost:8082/api/route \
+-H "Content-Type: application/json" \
+-d 
+    {
+    "startX": 126.9780,
+    "startY": 37.5665,
+    "endX": 127.0276,
+    "endY": 37.4979,
+    "sort": "congestion",
+    "departureTime": "2025-10-27T10:00:00"
+}
+```
+
+#### 프론트엔드 사용 예시 (JavaScript `fetch`)
+
+프론트엔드에서 `fetch` API를 사용하여 경로 추천 API를 호출하는 방법은 다음과 같습니다.
+
+```javascript
+async function getRecommendedRoute(routeRequest) {
+  try {
+    const response = await fetch('http://localhost:8082/api/route', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(routeRequest),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log('Recommended Route:', data);
+    return data;
+  } catch (error) {
+    console.error('Error fetching recommended route:', error);
+  }
+}
+
+// API 호출 예시
+const routeRequest = {
+  startX: 126.9780,
+  startY: 37.5665,
+  endX: 127.0276,
+  endY: 37.4979,
+  sort: 'congestion',
+  departureTime: '2025-10-27T10:00:00',
+};
+
+getRecommendedRoute(routeRequest);
+```
+
+#### 응답 (Response)
+
+응답은 추천 경로 정보를 담고 있는 `RouteResponseDto` 객체입니다.
+
+### 2. 추천 API (`/api/recommend`)
 
 장소 추천과 관련된 모든 기능을 제공합니다.
 
-#### 1.1. 혼잡도를 포함한 장소 추천
+#### 2.1. 혼잡도를 포함한 장소 추천
 
 - **Endpoint**: `/api/recommend/with-congestion`
 - **Methods**: `GET`, `POST`
@@ -62,7 +147,7 @@
   ]
   ```
 
-#### 1.2. 세션에 저장된 추천 결과 조회
+#### 2.2. 세션에 저장된 추천 결과 조회
 
 - **Endpoint**: `/api/recommend/result/{sessionId}`
 - **Method**: `GET`
@@ -77,9 +162,9 @@
   # 세션 유지를 위해 쿠키 사용이 필요할 수 있습니다.
   curl --cookie "cookies.txt" http://localhost:8082/api/recommend/result/user1-query1
   ```
-- **응답**: 성공 시 `1.1` API의 응답과 동일한 JSON을 반환하며, ID가 없거나 세션 만료 시 `404 Not Found`를 반환합니다.
+- **응답**: 성공 시 `2.1` API의 응답과 동일한 JSON을 반환하며, ID가 없거나 세션 만료 시 `404 Not Found`를 반환합니다.
 
-#### 1.3. 장소 상세 정보 조회
+#### 2.3. 장소 상세 정보 조회
 
 - **Endpoint**: `/api/recommend/detail/{category}/{id}`
 - **Methods**: `GET`, `POST`
@@ -94,7 +179,7 @@
   curl http://localhost:8082/api/recommend/detail/food/2667283
   ```
 
-#### 1.4. 여러 장소의 특정 정보 조회
+#### 2.4. 여러 장소의 특정 정보 조회
 
 - **Endpoint**: `/api/recommend/detail/{category}/column`
 - **Methods**: `GET`, `POST`
@@ -112,7 +197,7 @@
   curl "http://localhost:8082/api/recommend/detail/food/column?ids=2667283,2849939&columns=title,firstimage"
   ```
 
-### 2. 채팅 API (`/chat`)
+### 3. 채팅 API (`/chat`)
 
 AI 기반의 대화형 인터페이스를 제공합니다.
 
@@ -167,7 +252,7 @@ AI 기반의 대화형 인터페이스를 제공합니다.
        -b "cookies.txt" \
        -d 
              {
-               "userId": "1234567890" # 사용자의 providerId
+               "userId": "1234567890", # 사용자의 providerId
                "message": "아까 추천해준 곳들 다시 알려줄래?"
              }
   ```
@@ -182,7 +267,7 @@ AI 기반의 대화형 인터페이스를 제공합니다.
   }
   ```
 
-### 3. 혼잡도 일괄 조회 API (`/api/congestion`)
+### 4. 혼잡도 일괄 조회 API (`/api/congestion`)
 
 - **Endpoint**: `/api/congestion`
 - **Method**: `POST`
@@ -226,11 +311,11 @@ AI 기반의 대화형 인터페이스를 제공합니다.
   ]
   ```
 
-### 4. 인증 API (Authentication API)
+### 5. 인증 API (Authentication API)
 
 사용자 인증 및 세션 관리를 위한 API입니다.
 
-#### 4.1. 로그아웃
+#### 5.1. 로그아웃
 
 - **Endpoint**: `/logout`
 - **Method**: `POST`
@@ -243,6 +328,7 @@ AI 기반의 대화형 인터페이스를 제공합니다.
   ```
 
 ---
+
 
 ### 부록 A: 장소 타입 코드
 
@@ -258,6 +344,7 @@ AI 기반의 대화형 인터페이스를 제공합니다.
 | 39               | `food`                          | 음식점         | 
 
 ---
+
 
 ### 부록 B: 서버 주요 설정
 

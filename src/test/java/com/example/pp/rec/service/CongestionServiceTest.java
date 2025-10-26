@@ -46,8 +46,8 @@ class CongestionServiceTest {
     void getCongestion_should_return_congestion_list_for_valid_locations() throws JsonProcessingException, InterruptedException {
         // given: 테스트 준비
         List<CongestionRequestDto> requestDtos = List.of(
-                new CongestionRequestDto("37.5665", "126.9780", "2025-10-22T14:30:00"),
-                new CongestionRequestDto("37.5796", "126.9770", "2025-10-22T15:00:00")
+                new CongestionRequestDto(37.5665, 126.9780, "2025-10-22T14:30:00"),
+                new CongestionRequestDto(37.5796, 126.9770, "2025-10-22T15:00:00")
         );
 
         List<CongestionResponseDto> expectedResponse = List.of(

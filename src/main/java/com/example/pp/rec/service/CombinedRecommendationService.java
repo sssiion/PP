@@ -66,13 +66,18 @@ public class CombinedRecommendationService {
                     }
 
                     List<Map<String, Object>> flattenedPlaces = new ArrayList<>();
+                    Set<String> seenIds = new HashSet<>();
                     recommendations.forEach(seedGroup -> {
                         Map<String, List<?>> results = (Map<String, List<?>>) seedGroup.get("results");
                         if (results != null) {
                             results.values().forEach(places -> {
                                 places.forEach(placeObj -> {
                                     Map<String, Object> placeMap = objectMapper.convertValue(placeObj, new TypeReference<>() {});
-                                    flattenedPlaces.add(placeMap);
+                                    String id = (String) placeMap.get("id");
+                                    if (id != null && !seenIds.contains(id)) {
+                                        flattenedPlaces.add(placeMap);
+                                        seenIds.add(id);
+                                    }
                                 });
                             });
                         }
