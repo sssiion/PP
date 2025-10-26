@@ -44,35 +44,98 @@ public class ChatService {
     private static final Pattern PLACE_HINT =
             Pattern.compile("([가-힣A-Za-z0-9]+(?:역|동|구|시|군|면))");
 
-    public Mono<ServerMessageResponse> processChatRequest(UserMessageRequest req, WebSession session){
-        // 1. AI 의도+엔티티 구조화
-        return ai.parseIntentAndEntities(req.getMessage(), session)
-                .flatMap(parsed -> {
-                    // 2. 정보 미충분 → 추가 질문 (무한루프방지/필수info 체크)
-                    if (!parsed.isReady()) {
-                        return Mono.just(ServerMessageResponse.text(parsed.getAskWhatIsMissing()));
-                    }
-                    // 3. 충분(장소,키워드 등) → API 파라미터 분리해서 검색
-                    return callExternalApis(parsed)
-                            // 4. 결과를 AI 종합요약 후 사용자에게 보여줌
-                            .flatMap(extResult -> ai.summarizePlacesAndBlogs(parsed, extResult)
-                                    .map(ServerMessageResponse::text));
-                });
+    public Mono<ServerMessageResponse> processChatRequest(UserMessageRequest req, WebSession session) {
+        return contextRepo.findById(req.getSessionId())
+                .defaultIfEmpty(new ChatContext())
+                .flatMap(ctx -> ai.parseIntentAndEntities(req.getMessage(), session)
+                        .flatMap(intent -> {
+                            // 상태변경 여부 판단 (자료 확보 후 결정)
+                            boolean changedTemp = false;
+                            Map<String, String> prefKeywords = Optional.ofNullable(ctx.getPreferenceKeywords()).orElse(new HashMap<>());
+
+                            // 반경 값 비교
+                            if (intent.getRadius() != null && !intent.getRadius().toString().equals(prefKeywords.get("radius"))) {
+                                prefKeywords.put("radius", intent.getRadius().toString());
+                                changedTemp = true;
+                            }
+
+                            // 장소명 비교
+                            if (intent.getPlaceName() != null && !intent.getPlaceName().equals(ctx.getLastPlaceName())) {
+                                ctx.setLastPlaceName(intent.getPlaceName());
+                                changedTemp = true;
+                            }
+
+                            // 키워드 비교
+                            String newKeywords = String.join(",", intent.getKeywords() == null ? List.of() : intent.getKeywords());
+                            if (!newKeywords.equals(ctx.getLastCategory())) {
+                                ctx.setLastCategory(newKeywords);
+                                changedTemp = true;
+                            }
+
+                            // 세션 저장
+                            final boolean finalChanged = changedTemp; // final 선언 후 람다 내부에서 읽기전용
+                            return contextRepo.save(ctx)
+                                    .flatMap(savedCtx -> {
+                                        if (!intent.isReady()) {
+                                            return Mono.just(ServerMessageResponse.text(intent.getAskWhatIsMissing()));
+                                        }
+                                        if ("READY".equals(savedCtx.getState()) && !finalChanged) {
+                                            return Mono.just(ServerMessageResponse.text("조건이 바뀌지 않아 검색이 반복되지 않습니다. 다른 조건을 말씀해 주세요."));
+                                        }
+                                        savedCtx.setState("READY");
+                                        return contextRepo.save(savedCtx)
+                                                .then(callExternalApis(intent))
+                                                .flatMap(extResult -> ai.summarizePlacesAndBlogs(intent, extResult)
+                                                        .map(ServerMessageResponse::text));
+                                    });
+                        })
+                );
+    }
+
+
+
+
+
+
+    public Mono<ParsedIntent> parseIntentAndEntities(String userMessage, Object context) {
+        ParsedIntent intent = new ParsedIntent();
+        // 예: 반경 추출 (단위 km, m 모두 대응)
+        Pattern radiusPat = Pattern.compile("반경 ?([0-9]+)\\s*(km|m)");
+        Matcher m = radiusPat.matcher(userMessage);
+        if (m.find()) {
+            int r = Integer.parseInt(m.group(1));
+            intent.setRadius(m.group(2).equals("km") ? r * 1000 : r);
+        }
+        // 장소명 추출 - 간단 정규식
+        Pattern placePat = Pattern.compile("([가-힣A-Za-z0-9]+(역|동|구|시|군|면))");
+        Matcher pm = placePat.matcher(userMessage);
+        if (pm.find()) {
+            intent.setPlaceName(pm.group(1));
+        }
+        // 키워드 예시 추출
+        List<String> keywords = new ArrayList<>();
+        for (String k : List.of("카페","맛집","조용한","아기자기","서점","공원")) {
+            if (userMessage.contains(k)) keywords.add(k);
+        }
+        intent.setKeywords(keywords);
+
+        // ready 판정: 장소명 또는 키워드가 있으면 true
+        intent.setReady((intent.getPlaceName() != null && !intent.getPlaceName().isBlank()) || !keywords.isEmpty());
+
+        if (!intent.isReady()) intent.setAskWhatIsMissing("원하시는 장소나 조건을 좀 더 알려주세요. 예) ‘홍대역 조용한 카페’");
+        return Mono.just(intent);
     }
     private Mono<ExternalSearchResult> callExternalApis(ParsedIntent intent) {
-        double lat = intent.getLat()!=null ? intent.getLat() : 0.0;
-        double lon = intent.getLon()!=null ? intent.getLon() : 0.0;
-        int radius = intent.getRadius()!=null ? intent.getRadius() : 3000;
+        double lat = intent.getLat() != null ? intent.getLat() : 0.0;
+        double lon = intent.getLon() != null ? intent.getLon() : 0.0;
+        int radius = intent.getRadius() != null ? intent.getRadius() : 3000;
         String key = String.join(" ",
-                intent.getPlaceName()==null?"":intent.getPlaceName(),
-                String.join(" ", intent.getKeywords()==null?List.of():intent.getKeywords())
+                intent.getPlaceName() == null ? "" : intent.getPlaceName(),
+                String.join(" ", intent.getKeywords() == null ? List.of() : intent.getKeywords())
         );
-        Mono<List<RecommendedPlace>> kakaoMono
-                = kakao.searchByKeyword(key, lat, lon, 10, radius)
+        Mono<List<RecommendedPlace>> kakaoMono = kakao.searchByKeyword(key, lat, lon, 10, radius)
                 .map(PlaceMapper::fromKakaoDocuments).onErrorReturn(List.of());
-        Mono<List<BlogReview>> blogMono
-                = naver.searchBlogReviewsAsParsed(key, 5, 1, "sim")
-                .onErrorReturn(List.of());
+        Mono<List<BlogReview>> blogMono = naver.searchBlogReviewsAsParsed(key, 5, 1, "sim").onErrorReturn(List.of());
 
         return Mono.zip(kakaoMono, blogMono)
                 .map(zip -> {
@@ -82,6 +145,7 @@ public class ChatService {
                     return ext;
                 });
     }
+
 
     private ServerMessageResponse quickReaction(UserMessageRequest req, ChatContext ctx){
         String msg = Optional.ofNullable(req.getMessage()).orElse("").trim();

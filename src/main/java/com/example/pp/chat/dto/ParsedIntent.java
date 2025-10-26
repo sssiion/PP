@@ -8,11 +8,13 @@ public class ParsedIntent {
     private String placeName;
     private String placeType;
     private Double lat, lon;
-    private Integer radius; // 미터
+    private Integer radius; // 반경(미터)
     private String address;
-    private List<String> keywords;
-    private boolean ready; // API 호출 조건이 모두 갖춰졌는지
-    private String askWhatIsMissing; // 부족시 추가질문
+    private List<String> keywords = new ArrayList<>();
+    private boolean ready;
+    private String askWhatIsMissing;
 
-    public boolean isReady() { return ready; }
+    public boolean isReady() {
+        return ready;
+    }
 }

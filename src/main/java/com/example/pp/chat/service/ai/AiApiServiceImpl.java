@@ -15,8 +15,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 @Service
 @RequiredArgsConstructor
 public class AiApiServiceImpl implements AiApiService {
@@ -95,16 +99,31 @@ public class AiApiServiceImpl implements AiApiService {
     }
     @Override
     public Mono<ParsedIntent> parseIntentAndEntities(String userMessage, Object context) {
-        // 실제 환경에서는 Gemini API 호출 + JSON 결과 반환!
-        // 예시 파싱(실 서비스는 REST 호출+ Jackson/JsonNode 파싱)
         ParsedIntent intent = new ParsedIntent();
-        if (userMessage.contains("강남역")) {
-            intent.setPlaceName("강남역");
-            intent.setReady(true);
-        } else {
-            intent.setReady(false);
-            intent.setAskWhatIsMissing("어느 지역이나 장소를 알려주시면 추천해드릴 수 있습니다.");
+        // 예: 반경 추출 (단위 km, m 모두 대응)
+        Pattern radiusPat = Pattern.compile("반경 ?([0-9]+)\\s*(km|m)");
+        Matcher m = radiusPat.matcher(userMessage);
+        if (m.find()) {
+            int r = Integer.parseInt(m.group(1));
+            intent.setRadius(m.group(2).equals("km") ? r * 1000 : r);
         }
+        // 장소명 추출 - 간단 정규식
+        Pattern placePat = Pattern.compile("([가-힣A-Za-z0-9]+(역|동|구|시|군|면))");
+        Matcher pm = placePat.matcher(userMessage);
+        if (pm.find()) {
+            intent.setPlaceName(pm.group(1));
+        }
+        // 키워드 예시 추출
+        List<String> keywords = new ArrayList<>();
+        for (String k : List.of("카페","맛집","조용한","아기자기","서점","공원")) {
+            if (userMessage.contains(k)) keywords.add(k);
+        }
+        intent.setKeywords(keywords);
+
+        // ready 판정: 장소명 또는 키워드가 있으면 true
+        intent.setReady((intent.getPlaceName() != null && !intent.getPlaceName().isBlank()) || !keywords.isEmpty());
+
+        if (!intent.isReady()) intent.setAskWhatIsMissing("원하시는 장소나 조건을 좀 더 알려주세요. 예) ‘홍대역 조용한 카페’");
         return Mono.just(intent);
     }
 
