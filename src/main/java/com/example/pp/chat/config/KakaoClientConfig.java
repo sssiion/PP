@@ -9,7 +9,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 
 @Configuration
 public class KakaoClientConfig {
-    @Value("${kakao.rest.api.key}")
+    @Value("${kakao.api-key}")
     private String kakaoApiKey;
 
     @Bean

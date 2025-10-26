@@ -16,14 +16,7 @@ import java.time.Duration;
 @RequiredArgsConstructor
 public class HttpClientConfig {
 
-    @Bean
-    WebClient kakaoWebClient(WebClient.Builder b, @Value("${kakao.api-key:}") String key) {
-        String k = key.isBlank()? System.getenv("KAKAO_REST_API_KEY") : key;
-        return b.baseUrl("https://dapi.kakao.com")
-                .defaultHeader("Authorization", "KakaoAK " + k)
-                .defaultHeader("Content-Type", "application/json;charset=UTF-8")
-                .build();
-    }
+   
 
     @Bean
     WebClient naverWebClient(WebClient.Builder b,
