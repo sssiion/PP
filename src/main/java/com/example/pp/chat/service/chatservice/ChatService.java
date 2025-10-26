@@ -44,9 +44,9 @@ public class ChatService {
     private static final Pattern PLACE_HINT =
             Pattern.compile("([가-힣A-Za-z0-9]+(?:역|동|구|시|군|면))");
 
+
     public Mono<ServerMessageResponse> processChatRequest(UserMessageRequest req, WebSession session) {
-        return contextRepo.findById(req.getSessionId())
-                .defaultIfEmpty(new ChatContext())
+        return loadOrInitContext(req)
                 .flatMap(ctx -> ai.parseIntentAndEntities(req.getMessage(), session)
                         .flatMap(intent -> {
                             // 상태변경 여부 판단 (자료 확보 후 결정)
@@ -182,14 +182,18 @@ public class ChatService {
     }
 
     // 세션 컨텍스트 불러오기/초기화
-    private Mono<ChatContext> loadOrInitContext(UserMessageRequest req){
-        String sid = Optional.ofNullable(req.getSessionId()).filter(s->!s.isBlank()).orElse(UUID.randomUUID().toString());
+    public Mono<ChatContext> loadOrInitContext(UserMessageRequest req) {
+        String sid = Optional.ofNullable(req.getSessionId())
+                .filter(s -> !s.isBlank())
+                .orElse(UUID.randomUUID().toString());
+
         return contextRepo.findById(sid)
                 .switchIfEmpty(Mono.defer(() -> {
-                    ChatContext c = new ChatContext();
-                    c.setSessionId(sid);
-                    c.setState(ChatState.AWAITING_LOCATION_CHOICE.name());
-                    return contextRepo.save(c);
+                    ChatContext ctx = new ChatContext();
+                    ctx.setSessionId(sid);  // 반드시 sessionId 세팅
+                    ctx.setState(ChatState.AWAITING_LOCATION_CHOICE.name());
+                    ctx.setPreferenceKeywords(new HashMap<>());
+                    return contextRepo.save(ctx);
                 }));
     }
 
