@@ -1,6 +1,8 @@
 package com.example.pp.chat.service.ai;
 
 
+import com.example.pp.chat.dto.ExternalSearchResult;
+import com.example.pp.chat.dto.ParsedIntent;
 import com.example.pp.chat.util.JsonSchemaValidator;
 import com.example.pp.chat.util.PromptLoader;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -90,6 +92,36 @@ public class AiApiServiceImpl implements AiApiService {
                 throw new RuntimeException(e);
             }
         });
+    }
+    @Override
+    public Mono<ParsedIntent> parseIntentAndEntities(String userMessage, Object context) {
+        // 실제 환경에서는 Gemini API 호출 + JSON 결과 반환!
+        // 예시 파싱(실 서비스는 REST 호출+ Jackson/JsonNode 파싱)
+        ParsedIntent intent = new ParsedIntent();
+        if (userMessage.contains("강남역")) {
+            intent.setPlaceName("강남역");
+            intent.setReady(true);
+        } else {
+            intent.setReady(false);
+            intent.setAskWhatIsMissing("어느 지역이나 장소를 알려주시면 추천해드릴 수 있습니다.");
+        }
+        return Mono.just(intent);
+    }
+
+    @Override
+    public Mono<String> summarizePlacesAndBlogs(ParsedIntent intent, ExternalSearchResult result) {
+        // 카카오 잠소 + 네이버 블로그 리스트를 AI 프롬프트에 모두 넣고 요약 생성
+        StringBuilder sb = new StringBuilder();
+        sb.append(intent.getPlaceName()).append(" 주변 추천: ").append(result.getPlaces().size()).append(" 곳\n");
+        for (var p: result.getPlaces()) sb.append("- ").append(p.getName()).append(": ").append(p.getAddress()).append("\n");
+        if (result.getBlogs()!=null && !result.getBlogs().isEmpty()) {
+            sb.append("관련 블로그 리뷰 Top 3:\n");
+            for (int i=0; i<Math.min(result.getBlogs().size(),3); i++) {
+                var rev = result.getBlogs().get(i);
+                sb.append("* ").append(rev.getTitle()).append(" - ").append(rev.getDescription()).append("\n");
+            }
+        }
+        return Mono.just(sb.toString());
     }
 }
 

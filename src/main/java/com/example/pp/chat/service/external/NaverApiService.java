@@ -54,4 +54,5 @@ public class NaverApiService {
                     return desc;
                 });
     }
+
 }
