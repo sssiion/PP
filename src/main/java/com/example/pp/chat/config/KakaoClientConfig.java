@@ -19,6 +19,7 @@ public class KakaoClientConfig {
         return builder
                 .baseUrl("https://dapi.kakao.com")
                 .defaultHeader(HttpHeaders.AUTHORIZATION, "KakaoAK " + "c89452a4df777f22b298c13e30421435")
+                .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                 .build();
     }
 }

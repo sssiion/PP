@@ -13,24 +13,15 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-@Component
+@Component// com/example/pp/chat/service/external/KakaoLocalClient.java
+
 public class KakaoLocalClient {
     private final WebClient kakaoWebClient;
     private static final ParameterizedTypeReference<Map<String,Object>> MAP_REF =
             new ParameterizedTypeReference<Map<String,Object>>() {};
 
-    public KakaoLocalClient(WebClient kakaoWebClient) {
+    public KakaoLocalClient( WebClient kakaoWebClient) {
         this.kakaoWebClient = kakaoWebClient;
-    }
-
-    private <T> Mono<T> retrieveWithBody(WebClient.RequestHeadersSpec<?> spec, Class<T> clazz) {
-        return spec.retrieve()
-                .onStatus(HttpStatusCode::isError, resp ->
-                        resp.bodyToMono(String.class)
-                                .defaultIfEmpty("")
-                                .flatMap(body -> Mono.error(new KakaoApiException(resp.statusCode().value(), body)))
-                )
-                .bodyToMono(clazz);
     }
 
     private Mono<Map<String,Object>> retrieveWithBodyMap(WebClient.RequestHeadersSpec<?> spec) {
