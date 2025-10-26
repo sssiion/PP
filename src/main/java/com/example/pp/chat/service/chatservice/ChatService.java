@@ -26,6 +26,7 @@ import reactor.util.function.Tuples;
 
 import java.time.LocalTime;
 import java.util.*;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
@@ -39,6 +40,11 @@ public class ChatService {
     private final InMemoryChatContextRepository contextRepo;
     private final ObjectMapper om = new ObjectMapper();
     private final Optional<io.micrometer.core.instrument.Timer> chatTimerOpt;
+
+    private static final Set<String> CATEGORY_WORDS =
+            Set.of("카페","맛집","식당","한식","양식","중식","베이커리","디저트","술집","서점","공원","관광","명소");
+    private static final Pattern PLACE_HINT =
+            Pattern.compile("([가-힣A-Za-z0-9]+(?:역|동|구|시|군|면))");
 
     public Mono<ServerMessageResponse> processChatRequest(UserMessageRequest req, WebSession session){
         long start = System.nanoTime();
