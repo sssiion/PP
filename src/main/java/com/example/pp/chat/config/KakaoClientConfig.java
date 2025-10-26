@@ -18,8 +18,7 @@ public class KakaoClientConfig {
     public WebClient kakaoWebClient(WebClient.Builder builder) {
         return builder
                 .baseUrl("https://dapi.kakao.com")
-                .defaultHeader(HttpHeaders.AUTHORIZATION, "KakaoAK " + kakaoApiKey)
-                .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .defaultHeader(HttpHeaders.AUTHORIZATION, "KakaoAK " + "c89452a4df777f22b298c13e30421435")
                 .build();
     }
 }

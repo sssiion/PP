@@ -27,7 +27,6 @@ public class HttpClientConfig {
         return b.baseUrl("https://openapi.naver.com")
                 .defaultHeader("X-Naver-Client-Id", cid)
                 .defaultHeader("X-Naver-Client-Secret", csec)
-                .defaultHeader("Content-Type","application/json;charset=UTF-8")
                 .build();
     }
 
@@ -35,6 +34,7 @@ public class HttpClientConfig {
     WebClient geminiWebClient(WebClient.Builder b) {
         return b.baseUrl("https://generativelanguage.googleapis.com")
                 .defaultHeader("Content-Type","application/json")
+                .defaultHeader("x-goog-api-key", "AIzaSyCwqFuqZ2cuV9gaAAKq2_fmgCB-UyjyqkY")
                 .build();
     }
 
