@@ -1,0 +1,67 @@
+package com.example.pp.chat.service.external;
+
+import lombok.RequiredArgsConstructor;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+@Component
+@RequiredArgsConstructor
+public class KakaoLocalClient {
+    private final WebClient kakaoWebClient; // baseUrl=https://dapi.kakao.com, default header Authorization: KakaoAK {REST_API_KEY}
+
+    public Mono<List<Map<String,Object>>> searchKeywordPaged(String query, double lat, double lon, int radiusMeters) {
+        Mono<Map<String,Object>> p1 = kakaoWebClient.get()
+                .uri(uri -> uri.path("/v2/local/search/keyword.json")
+                        .queryParam("query", query)
+                        .queryParam("x", String.valueOf(lon))
+                        .queryParam("y", String.valueOf(lat))
+                        .queryParam("radius", Math.min(radiusMeters, 20000))
+                        .queryParam("size", 15)
+                        .queryParam("page", 1)
+                        .queryParam("sort", "distance")
+                        .build())
+                .retrieve().bodyToMono(new ParameterizedTypeReference<>() {});
+        Mono<Object> p2 = kakaoWebClient.get()
+                .uri(uri -> uri.path("/v2/local/search/keyword.json")
+                        .queryParam("query", query)
+                        .queryParam("x", String.valueOf(lon))
+                        .queryParam("y", String.valueOf(lat))
+                        .queryParam("radius", Math.min(radiusMeters, 20000))
+                        .queryParam("size", 15)
+                        .queryParam("page", 2)
+                        .queryParam("sort", "distance")
+                        .build())
+                .retrieve().bodyToMono(new ParameterizedTypeReference<>() {})
+                .onErrorResume(e -> Mono.just(Map.of("documents", List.of(), "meta", Map.of())));
+
+        return Mono.zip(p1.onErrorResume(e -> Mono.just(Map.of("documents", List.of()))),
+                        p2)
+                .map(tuple -> {
+                    List<Map<String,Object>> d1 = (List<Map<String,Object>>) tuple.getT1().getOrDefault("documents", List.of());
+                    List<Map<String,Object>> d2 = (List<Map<String,Object>>) tuple.getT2().getOrDefault("documents", List.of());
+                    // id 중복 제거
+                    Map<String, Map<String,Object>> byId = new LinkedHashMap<>();
+                    for (Map<String,Object> m : d1) byId.put(String.valueOf(m.get("id")), m);
+                    for (Map<String,Object> m : d2) byId.put(String.valueOf(m.get("id")), m);
+                    return new ArrayList<>(byId.values());
+                });
+    }
+
+    public Mono<List<Map<String,Object>>> geocodeAddress(String address) {
+        return kakaoWebClient.get()
+                .uri(uri -> uri.path("/v2/local/search/address.json")
+                        .queryParam("query", address)
+                        .build())
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<Map<String,Object>>() {})
+                .map(res -> (List<Map<String,Object>>) res.getOrDefault("documents", List.of()))
+                .onErrorResume(e -> Mono.just(List.of()));
+    }
+}

@@ -42,8 +42,11 @@ public class CombinedRecommendationService {
     // Main public method that dispatches to the correct sorting strategy
     public Mono<List<Map<String, Object>>> recommendWithCongestion(
             Double lat, Double lon, LocalTime time, Integer radius, Integer pageSize, List<String> categories, LocalDateTime congestionDateTime, SortBy sortBy) {
+        LocalTime effTime = (time != null) ? time : LocalTime.now();
+        LocalDateTime effCdt = (congestionDateTime != null) ? congestionDateTime : LocalDateTime.now();
 
-        return getEnrichedAndFlattenedPlaces(lat, lon, time, radius, pageSize, categories, congestionDateTime)
+
+        return getEnrichedAndFlattenedPlaces(lat, lon, effTime, radius, pageSize, categories, effCdt)
                 .map(places -> {
                     Comparator<Map<String, Object>> comparator = switch (sortBy) {
                         case CONGESTION -> Comparator
@@ -58,8 +61,10 @@ public class CombinedRecommendationService {
 
     private Mono<List<Map<String, Object>>> getEnrichedAndFlattenedPlaces(
             Double lat, Double lon, LocalTime time, Integer radius, Integer pageSize, List<String> categories, LocalDateTime congestionDateTime) {
+        LocalTime effTime = (time != null) ? time : LocalTime.now();
+        LocalDateTime effCdt = (congestionDateTime != null) ? congestionDateTime : LocalDateTime.now();
 
-        return list1Service.build(lat, lon, time, radius, pageSize, categories)
+        return list1Service.build(lat, lon, effTime, radius, pageSize, categories)
                 .flatMap(recommendations -> {
                     if (recommendations == null || recommendations.isEmpty()) {
                         return Mono.just(new ArrayList<>());
@@ -95,7 +100,7 @@ public class CombinedRecommendationService {
                                     return new CongestionRequestDto(
                                             Double.valueOf(placeLat.toString()),
                                             Double.valueOf(placeLon.toString()),
-                                            congestionDateTime.format(DateTimeFormatter.ISO_DATE_TIME)
+                                            effCdt.format(DateTimeFormatter.ISO_DATE_TIME)
                                     );
                                 }
                                 return null;
