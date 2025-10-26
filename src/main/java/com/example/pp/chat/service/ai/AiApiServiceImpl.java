@@ -52,7 +52,6 @@ public class AiApiServiceImpl implements AiApiService {
         );
         return geminiWebClient.post()
                 .uri(uri -> uri.path("/v1beta/models/{model}:generateContent")
-                        .queryParam("key", apiKey())
                         .build(model))
                 .bodyValue(body)
                 .retrieve()
