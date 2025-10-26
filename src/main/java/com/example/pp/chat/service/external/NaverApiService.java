@@ -19,48 +19,37 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class NaverApiService {
-
     private final WebClient naverWebClient;
-    private final RateLimiter naverLimiter;
-    private final Retry externalRetry;
 
-    @Value("${naver.client-id}")
-    private String clientId;
-    @Value("${naver.client-secret}")
-    private String clientSecret;
-
-    public Mono<List<Map<String,Object>>> searchLocal(String query, Integer display, Integer start, String sort) {
+    // 지역 검색: 네이버 검색 API (지역/장소)
+    public Mono<List<Map<String,Object>>> searchLocal(String query, Integer display, Integer start, String sort){
         return naverWebClient.get()
                 .uri(uri -> uri.path("/v1/search/local.json")
                         .queryParam("query", query)
-                        .queryParamIfPresent("display", Optional.ofNullable(display))
-                        .queryParamIfPresent("start", Optional.ofNullable(start))
-                        .queryParamIfPresent("sort", Optional.ofNullable(sort))
+                        .queryParam("display", display!=null?display:10)
+                        .queryParam("start", start!=null?start:1)
+                        .queryParam("sort", sort!=null?sort:"random")
                         .build())
-                .retrieve()
-                .bodyToMono(Map.class)
+                .retrieve().bodyToMono(Map.class)
                 .map(m -> (List<Map<String,Object>>) m.getOrDefault("items", List.of()));
     }
 
-    public Mono<Map> searchBlog(String query, Integer display, Integer start, String sort) {
+    // 블로그 검색: 네이버 블로그 API
+    public Mono<List<String>> searchBlogSnippets(String query, Integer display, Integer start, String sort){
         return naverWebClient.get()
                 .uri(uri -> uri.path("/v1/search/blog.json")
                         .queryParam("query", query)
-                        .queryParamIfPresent("display", Optional.ofNullable(display))
-                        .queryParamIfPresent("start", Optional.ofNullable(start))
-                        .queryParamIfPresent("sort", Optional.ofNullable(sort))
+                        .queryParam("display", display!=null?display:5)
+                        .queryParam("start", start!=null?start:1)
+                        .queryParam("sort", sort!=null?sort:"sim")
                         .build())
-                .retrieve()
-                .bodyToMono(Map.class);
-    }
-    public Mono<List<String>> searchBlogSnippets(String query, Integer display, Integer start, String sort) {
-        return searchBlog(query, display, start, sort)
+                .retrieve().bodyToMono(Map.class)
                 .map(m -> {
                     List<Map<String,Object>> items = (List<Map<String,Object>>) m.getOrDefault("items", List.of());
                     List<String> desc = new ArrayList<>();
-                    for (Map<String,Object> it : items) {
+                    for (Map<String,Object> it: items){
                         Object d = it.get("description");
-                        if (d != null) desc.add(String.valueOf(d));
+                        if (d!=null) desc.add(String.valueOf(d));
                     }
                     return desc;
                 });

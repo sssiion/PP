@@ -7,24 +7,20 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.Data;
 
+import java.util.HashMap;
 import java.util.Map;
 
-@Entity
-@Table(name = "chat_context")
+
 @Data
 public class ChatContext {
-    @Id
     private String sessionId;
-
-    private String state; // ChatState.name() 저장
-
-    private String congestionPreference; // ex) 여유/보통/약간 붐빔/붐빔
-
-    @Convert(converter = MapStringStringConverter.class)
-    private Map<String, String> preferenceKeywords;
-
+    private String state;
+    private String lastPlaceName;
+    private String lastCategory;
     private Double currentSearchLat;
     private Double currentSearchLon;
-
-    private String promptVersion; // 프롬프트 버저닝
+    private String congestionPreference;
+    private String lastIntent;
+    private Map<String,String> preferenceKeywords;
+    private Map<String,Boolean> flags = new HashMap<>();
 }

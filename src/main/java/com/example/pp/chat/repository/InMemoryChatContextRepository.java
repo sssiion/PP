@@ -8,8 +8,8 @@ import reactor.core.publisher.Mono;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 @Repository
-public class InMemoryChatContextRepository { // 이름이 Repository지만 간단 Bean
-    private final Map<String, ChatContext> store = new ConcurrentHashMap<>();
+public class InMemoryChatContextRepository {
+    private final ConcurrentHashMap<String, ChatContext> store = new ConcurrentHashMap<>();
 
     public Mono<ChatContext> findById(String id) {
         return Mono.justOrEmpty(store.get(id));
