@@ -23,7 +23,7 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-// com/example/pp/chat/service/chatservice/ChatFlowService.java
+
 @Service
 @RequiredArgsConstructor
 public class ChatFlowService {
@@ -35,14 +35,15 @@ public class ChatFlowService {
         String sessionId = Optional.ofNullable(req.getSessionId()).filter(s->!s.isBlank()).orElse(UUID.randomUUID().toString());
         String raw = Optional.ofNullable(req.getMessage()).orElse("").trim();
 
-        return ensureCoordinatesWithFallback(raw, req.getLat(), req.getLon())
+        return ensureCoordinatesWithKeyword(raw, req.getLat(), req.getLon())
                 .switchIfEmpty(Mono.error(new IllegalStateException("NEED_LOCATION")))
                 .flatMap(coord -> {
                     double lat = coord.getT1();
                     double lon = coord.getT2();
                     String query = normalizeQuery(raw);
 
-                    return kakao.searchKeywordPaged(query, lat, lon, 5000)
+                    // Kakao keyword 검색: x=경도, y=위도, radius, size=15 page=1~2, sort=distance
+                    return kakao.searchKeywordPaged(query, lat, lon, 5000) // 문서 규격에 맞는 파라미터 구성
                             .map(docs -> toPlaceBasics(docs, lat, lon))
                             .flatMap(basics -> placeStore.savePlacesBasic(sessionId, basics).thenReturn(basics))
                             .flatMap(basics -> {
@@ -69,44 +70,32 @@ public class ChatFlowService {
                 });
     }
 
-    private Mono<Tuple2<Double,Double>> ensureCoordinatesWithFallback(String message, Double lat, Double lon) {
+    // 변경: address 지오코딩 제거. keyword만으로 좌표를 확보.
+    private Mono<Tuple2<Double,Double>> ensureCoordinatesWithKeyword(String message, Double lat, Double lon) {
         if (lat!=null && lon!=null) return Mono.just(Tuples.of(lat, lon));
         String place = extractPlace(message);
-        if (place!=null && !place.isBlank()) {
-            // 1차: 주소 지오코딩
-            return kakao.geocodeAddress(place)
-                    .flatMap(list -> {
-                        if (!list.isEmpty()) {
-                            Map<String,Object> first = list.get(0);
-                            double y = parseDouble(first.get("y"));
-                            double x = parseDouble(first.get("x"));
-                            if (y!=0.0 || x!=0.0) return Mono.just(Tuples.of(y, x));
-                        }
-                        // 2차 폴백: 키워드 검색 1건으로 좌표 확보
-                        return kakao.searchKeywordPaged(place, 37.5665, 126.9780, 20000) // 서울시청을 임시 중심
-                                .map(docs -> {
-                                    return docs.stream().findFirst()
-                                            .map(doc -> Tuples.of(parseDouble(doc.get("y")), parseDouble(doc.get("x"))))
-                                            .orElse(null);
-                                })
-                                .flatMap(coord -> coord != null ? Mono.just(coord) : Mono.empty());
-                    });
-        }
-        return Mono.empty();
+        if (place==null || place.isBlank()) return Mono.empty();
+
+        // 서울시청을 임시 중심으로 keyword 검색 1페이지 거리정렬 → 첫 문서의 y/x로 좌표 확보
+        double centerLat = 37.5665, centerLon = 126.9780;
+        return kakao.searchKeywordPaged(place, centerLat, centerLon, 20000)
+                .map(docs -> docs.stream().findFirst()
+                        .map(doc -> Tuples.of(parseDouble(doc.get("y")), parseDouble(doc.get("x"))))
+                        .orElse(null))
+                .flatMap(coord -> coord != null ? Mono.just(coord) : Mono.empty());
     }
 
     private String normalizeQuery(String raw) {
         return raw.isBlank() ? "카페" : raw;
     }
 
-    @SuppressWarnings("unchecked")
     private List<PlaceBasic> toPlaceBasics(List<Map<String,Object>> docs, double userLat, double userLon) {
         return docs.stream().map(d -> {
                     String id = String.valueOf(d.get("id"));
                     String name = String.valueOf(d.getOrDefault("place_name",""));
                     String addr = String.valueOf(d.getOrDefault("road_address_name", d.getOrDefault("address_name","")));
-                    double lon = parseDouble(d.get("x"));
-                    double lat = parseDouble(d.get("y"));
+                    double lon = parseDouble(d.get("x")); // Kakao: x=경도
+                    double lat = parseDouble(d.get("y")); // Kakao: y=위도
                     String dist = String.valueOf(d.getOrDefault("distance",""));
                     double km = computeDistanceKm(userLat, userLon, lat, lon, dist);
                     return new PlaceBasic(id, name, lat, lon, addr, km);
@@ -151,7 +140,6 @@ public class ChatFlowService {
 
     private String extractPlace(String m) {
         if (m==null) return null;
-        // 접미사 없는 지명도 일부 허용 (+ 기존 패턴)
         Matcher pm = Pattern.compile("([가-힣A-Za-z0-9]+(?:역|동|구|시|군|면)?)").matcher(m);
         if (pm.find()) return pm.group(1);
         return null;
