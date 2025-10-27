@@ -55,6 +55,10 @@ public class RouteResponseDto {
         private String routeNumber; // e.g., "2호선" or "143"
         private String startName;
         private String endName;
+        private double startX;
+        private double startY;
+        private double endX;
+        private double endY;
         private int duration;
         private int distance;
         private String congestion; // e.g., "여유", "혼잡"

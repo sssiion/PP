@@ -107,54 +107,151 @@ public class RouteRecommendationService {
         }
     }
 
-    private Mono<RouteResponseDto.TransitSegment> processTransitLeg(Map<String, Object> leg, String departureTime, double currentX, double currentY) {
-        String mode = (String) leg.get("mode");
-        Map<String, Object> start = (Map<String, Object>) leg.get("start");
-        Map<String, Object> end = (Map<String, Object>) leg.get("end");
-        String routeName = "WALK".equals(mode) ? "도보" : (String) leg.get("route");
-        String startName = start != null ? (String) start.get("name") : "";
+        private Mono<RouteResponseDto.TransitSegment> processTransitLeg(Map<String, Object> leg, String departureTime, double currentX, double currentY) {
 
-        List<String> steps = new ArrayList<>();
-        if (leg.containsKey("steps")) {
-            List<Map<String, Object>> stepsList = (List<Map<String, Object>>) leg.get("steps");
-            for (Map<String, Object> step : stepsList) {
-                if (step.containsKey("description")) {
-                    steps.add((String) step.get("description"));
+            String mode = (String) leg.get("mode");
+
+            Map<String, Object> start = (Map<String, Object>) leg.get("start");
+
+            Map<String, Object> end = (Map<String, Object>) leg.get("end");
+
+            String routeName = "WALK".equals(mode) ? "도보" : (String) leg.get("route");
+
+            String startName = start != null ? (String) start.get("name") : "";
+
+            String endName = end != null ? (String) end.get("name") : "";
+
+    
+
+            List<String> steps = new ArrayList<>();
+
+            if (leg.containsKey("steps")) {
+
+                List<Map<String, Object>> stepsList = (List<Map<String, Object>>) leg.get("steps");
+
+                for (Map<String, Object> step : stepsList) {
+
+                    if (step.containsKey("description")) {
+
+                        steps.add((String) step.get("description"));
+
+                    }
+
                 }
-            }
-        }
 
-        Mono<double[]> coordsMono;
-        if (start != null && start.containsKey("lat") && start.containsKey("lon")) {
-            coordsMono = Mono.just(new double[]{getDouble(start, "lat"), getDouble(start, "lon")});
-        } else {
-            coordsMono = kakaoLocalClient.searchKeywordPaged(startName, currentY, currentX, 20000)
-                    .map(results -> {
-                        if (results.isEmpty()) {
-                            return new double[]{0.0, 0.0};
-                        }
-                        Map<String, Object> firstResult = results.get(0);
-                        double lat = Double.parseDouble(firstResult.get("y").toString());
-                        double lon = Double.parseDouble(firstResult.get("x").toString());
-                        return new double[]{lat, lon};
-                    });
-        }
-
-        return coordsMono.flatMap(coords -> {
-            if (coords[0] == 0.0) {
-                return Mono.just(new RouteResponseDto.TransitSegment(mode, routeName, startName, end != null ? (String) end.get("name") : "", getInt(leg, "sectionTime"), getInt(leg, "distance"), "정보없음", steps));
             }
 
-            CongestionRequestDto request = new CongestionRequestDto(coords[0], coords[1], getCongestionTime(departureTime));
-            Mono<String> congestionMono = congestionService.getCongestion(List.of(request))
-                    .map(responses -> responses.isEmpty() ? "정보없음" : responses.get(0).getCongestionLevel())
-                    .onErrorResume(e -> Mono.just("정보없음"));
+    
 
-            return congestionMono.map(congestion -> new RouteResponseDto.TransitSegment(
-                    mode, routeName, startName, end != null ? (String) end.get("name") : "", getInt(leg, "sectionTime"), getInt(leg, "distance"), congestion, steps
-            ));
-        });
-    }
+            Mono<double[]> startCoordsMono;
+
+            if (start != null && start.containsKey("lat") && start.containsKey("lon")) {
+
+                startCoordsMono = Mono.just(new double[]{getDouble(start, "lat"), getDouble(start, "lon")});
+
+            } else {
+
+                startCoordsMono = kakaoLocalClient.searchKeywordPaged(startName, currentY, currentX, 20000)
+
+                        .map(results -> {
+
+                            if (results.isEmpty()) {
+
+                                return new double[]{0.0, 0.0};
+
+                            }
+
+                            Map<String, Object> firstResult = results.get(0);
+
+                            double lat = Double.parseDouble(firstResult.get("y").toString());
+
+                            double lon = Double.parseDouble(firstResult.get("x").toString());
+
+                            return new double[]{lat, lon};
+
+                        });
+
+            }
+
+    
+
+            Mono<double[]> endCoordsMono;
+
+            if (end != null && end.containsKey("lat") && end.containsKey("lon")) {
+
+                endCoordsMono = Mono.just(new double[]{getDouble(end, "lat"), getDouble(end, "lon")});
+
+            } else {
+
+                endCoordsMono = startCoordsMono.flatMap(startCoords ->
+
+                        kakaoLocalClient.searchKeywordPaged(endName, startCoords[0], startCoords[1], 20000)
+
+                                .map(results -> {
+
+                                    if (results.isEmpty()) {
+
+                                        return new double[]{0.0, 0.0};
+
+                                    }
+
+                                    Map<String, Object> firstResult = results.get(0);
+
+                                    double lat = Double.parseDouble(firstResult.get("y").toString());
+
+                                    double lon = Double.parseDouble(firstResult.get("x").toString());
+
+                                    return new double[]{lat, lon};
+
+                                })
+
+                );
+
+            }
+
+    
+
+            return Mono.zip(startCoordsMono, endCoordsMono).flatMap(coordsTuple -> {
+
+                double[] startCoords = coordsTuple.getT1();
+
+                double[] endCoords = coordsTuple.getT2();
+
+    
+
+                if (startCoords[0] == 0.0) {
+
+                    return Mono.just(new RouteResponseDto.TransitSegment(mode, routeName, startName, endName, 0, 0, 0, 0, getInt(leg, "sectionTime"), getInt(leg, "distance"), "정보없음", steps));
+
+                }
+
+    
+
+                CongestionRequestDto request = new CongestionRequestDto(startCoords[0], startCoords[1], getCongestionTime(departureTime));
+
+                Mono<String> congestionMono = congestionService.getCongestion(List.of(request))
+
+                        .map(responses -> responses.isEmpty() ? "정보없음" : responses.get(0).getCongestionLevel())
+
+                        .onErrorResume(e -> Mono.just("정보없음"));
+
+    
+
+                return congestionMono.map(congestion -> new RouteResponseDto.TransitSegment(
+
+                        mode, routeName, startName, endName,
+
+                        startCoords[1], startCoords[0], // lon, lat
+
+                        endCoords[1], endCoords[0], // lon, lat
+
+                        getInt(leg, "sectionTime"), getInt(leg, "distance"), congestion, steps
+
+                ));
+
+            });
+
+        }
 
     private String scoreToCongestionLevel(double score) {
         if (score < 2.0) return "여유";
