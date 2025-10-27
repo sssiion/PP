@@ -62,6 +62,16 @@ public class RouteResponseDto {
         private int duration;
         private int distance;
         private String congestion; // e.g., "여유", "혼잡"
-        private List<String> steps; // Detailed instructions for WALK mode
+        private List<RouteStep> steps; // Detailed instructions for WALK mode
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class RouteStep {
+        private String streetName;
+        private int distance;
+        private String description;
+        private String linestring;
     }
 }

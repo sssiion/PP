@@ -123,22 +123,45 @@ public class RouteRecommendationService {
 
     
 
-            List<String> steps = new ArrayList<>();
+            List<RouteResponseDto.RouteStep> steps = new ArrayList<>();
 
-            if (leg.containsKey("steps")) {
-
-                List<Map<String, Object>> stepsList = (List<Map<String, Object>>) leg.get("steps");
-
-                for (Map<String, Object> step : stepsList) {
-
-                    if (step.containsKey("description")) {
-
-                        steps.add((String) step.get("description"));
-
+            if ("WALK".equals(mode)) {
+                if (leg.containsKey("steps")) {
+                    List<Map<String, Object>> stepsList = (List<Map<String, Object>>) leg.get("steps");
+                    for (Map<String, Object> step : stepsList) {
+                        String streetName = (String) step.get("streetName");
+                        int distance = getInt(step, "distance");
+                        String description = (String) step.get("description");
+                        String linestring = (String) step.get("linestring");
+                        steps.add(new RouteResponseDto.RouteStep(streetName, distance, description, linestring));
+                    }
+                }
+            } else if ("BUS".equals(mode) || "SUBWAY".equals(mode)) {
+                if (leg.containsKey("passStopList")) {
+                    Map<String, Object> passStopList = (Map<String, Object>) leg.get("passStopList");
+                    List<Map<String, Object>> stationList = (List<Map<String, Object>>) passStopList.get("stationList");
+                    String legLinestring = "";
+                    if (leg.containsKey("passShape")) {
+                        Map<String, Object> passShape = (Map<String, Object>) leg.get("passShape");
+                        legLinestring = (String) passShape.get("linestring");
                     }
 
+                    if (stationList != null && !stationList.isEmpty()) {
+                        for (int i = 0; i < stationList.size(); i++) {
+                            Map<String, Object> station = stationList.get(i);
+                            String stationName = (String) station.get("stationName");
+                            String description;
+                            if (i == 0) {
+                                description = stationName + "에서 " + routeName + " 탑승";
+                            } else if (i == stationList.size() - 1) {
+                                description = stationName + "에서 하차";
+                            } else {
+                                description = stationName + " 경유";
+                            }
+                            steps.add(new RouteResponseDto.RouteStep(routeName, 0, description, legLinestring));
+                        }
+                    }
                 }
-
             }
 
     
@@ -290,6 +313,13 @@ public class RouteRecommendationService {
         Object value = map.get(key);
         if (value instanceof Number) {
             return ((Number) value).doubleValue();
+        } else if (value instanceof String) {
+            try {
+                return Double.parseDouble((String) value);
+            } catch (NumberFormatException e) {
+                log.warn("Failed to parse double from string value for key {}: {}", key, value);
+                return 0.0;
+            }
         }
         return 0.0;
     }

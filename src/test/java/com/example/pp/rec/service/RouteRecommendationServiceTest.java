@@ -87,7 +87,7 @@ class RouteRecommendationServiceTest {
             .thenReturn(Mono.just(congestionForRoute2)); // 두번째 호출 시
 
         // when: 테스트할 메소드 호출
-        Mono<RouteResponseDto> result = routeRecommendationService.getRouteWithCongestion(1, 1, 2, 2, "congestion", null);
+        Mono<RouteResponseDto> result = routeRecommendationService.getRouteWithCongestion(1.0, 1.0, 2.0, 2.0, "congestion", null, (String) null);
 
         // then: 결과 검증
         StepVerifier.create(result)
@@ -117,7 +117,7 @@ class RouteRecommendationServiceTest {
             .thenReturn(Mono.just(congestionForRoute2));
 
         // when: 테스트할 메소드 호출
-        Mono<RouteResponseDto> result = routeRecommendationService.getRouteWithCongestion(1, 1, 2, 2, "duration", null);
+        Mono<RouteResponseDto> result = routeRecommendationService.getRouteWithCongestion(1.0, 1.0, 2.0, 2.0, "duration", null, (String) null);
 
         // then: 결과 검증
         StepVerifier.create(result)
