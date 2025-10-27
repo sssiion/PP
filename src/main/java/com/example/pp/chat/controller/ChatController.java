@@ -26,30 +26,21 @@ public class ChatController {
 
 
     @PostMapping
-    public Mono<ResponseEntity<?>> chat(@RequestBody UserMessageRequest req, WebSession session) {
+    public Mono<ResponseEntity<ServerMessageResponse>> chat(@RequestBody UserMessageRequest req, WebSession session) {
         return flow.runPipeline(req, session)
                 .map(body -> ResponseEntity.ok(body))
                 .onErrorResume(KakaoApiException.class, ex -> {
-                    Map<String, Object> err = Map.of(
-                            "errorType", "KakaoApiError",
-                            "status", ex.getStatus(),
-                            "message", ex.getBody()
-                    );
-                    return Mono.just(ResponseEntity.status(ex.getStatus()).body(err));
+                    String errorMessage = String.format("Kakao API Error: %s (status: %d)", ex.getBody(), ex.getStatus());
+                    ServerMessageResponse errorResponse = ServerMessageResponse.error(errorMessage);
+                    return Mono.just(ResponseEntity.status(ex.getStatus()).body(errorResponse));
                 })
                 .onErrorResume(ex -> {
                     if ("NEED_LOCATION".equals(ex.getMessage())) {
-                        Map<String,Object> msg = Map.of(
-                                "errorType", "NeedLocation",
-                                "message", "좌표가 없어요. [translate:홍대입구역], [translate:강남역] 같은 기준 위치를 말하거나 현재 위치를 공유해 주세요."
-                        );
-                        return Mono.just(ResponseEntity.ok(msg));
+                        ServerMessageResponse errorResponse = ServerMessageResponse.error("좌표가 없어요. [translate:홍대입구역], [translate:강남역] 같은 기준 위치를 말하거나 현재 위치를 공유해 주세요.");
+                        return Mono.just(ResponseEntity.ok(errorResponse));
                     }
-                    Map<String,Object> msg = Map.of(
-                            "errorType", "UnknownError",
-                            "message", "일시적 오류가 발생했어요. 잠시 후 다시 시도해주세요."
-                    );
-                    return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(msg));
+                    ServerMessageResponse errorResponse = ServerMessageResponse.error("일시적 오류가 발생했어요. 잠시 후 다시 시도해주세요.");
+                    return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse));
                 });
     }
 
