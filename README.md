@@ -8,19 +8,28 @@
 
 ### 1. 경로 추천 API (`/api/route`)
 
-경로 추천 API는 출발지와 도착지, 그리고 정렬 기준을 바탕으로 최적의 경로를 추천합니다.
+출발지와 목적지 간의 도보 또는 대중교통 경로를 추천합니다. 특히 경로의 혼잡도를 분석하여 사용자에게 쾌적한 이동 경험을 제공하는 것을 목표로 합니다.
 
-#### Endpoint
+#### 주요 기능
 
-```
-POST /api/route
-```
+- **다중 이동 수단 지원**: 
+  - **도보 (`"walk"`)**: 최단 거리, 추천 등 다양한 옵션을 기반으로 도보 경로를 제공합니다.
+  - **대중교통 (`"transit"`)**: 버스와 지하철을 포함한 최적의 통합 대중교통 경로를 제공합니다.
 
-#### 요청 (Request)
+- **혼잡도 분석**:
+  - **도보 경로**: 경로를 구성하는 여러 좌표를 기반으로 전체 경로의 평균 혼잡도를 계산하여 제공합니다.
+  - **대중교통 경로**:
+    - 경로 내 **도보 구간**은 해당 경로의 좌표를 기반으로 평균 혼잡도를 계산합니다.
+    - **버스/지하철 구간**은 Tmap API가 경로 좌표를 제공하지 않는 한계가 있습니다. 이를 해결하기 위해, 해당 구간의 **출발 정류장/역 이름**을 카카오 API로 검색하여 좌표를 얻고, 그 좌표를 기반으로 혼잡도를 계산합니다.
 
-##### 요청 본문 (Request Body)
+- **상세 경로 안내**:
+  - 도보 구간에 대해 상세한 단계별 길 안내("좌회전 후 50m 이동" 등)를 제공합니다.
 
-요청 본문은 다음과 같은 필드를 포함하는 JSON 객체입니다.
+#### API 사용법
+
+**Endpoint**: `POST /api/route`
+
+**요청 본문 (Request Body)**
 
 | 필드            | 타입     | 설명                                                                    | 필수 |
 | --------------- | -------- | ----------------------------------------------------------------------- | ---- |
@@ -28,68 +37,84 @@ POST /api/route
 | `startY`        | `number` | 출발지 위도 (예: `37.5665`)                                             | 예   |
 | `endX`          | `number` | 도착지 경도 (예: `127.0276`)                                            | 예   |
 | `endY`          | `number` | 도착지 위도 (예: `37.4979`)                                             | 예   |
-| `sort`          | `string` | 정렬 기준. `"congestion"` (혼잡도순) 또는 `"duration"` (소요 시간순). | 아니요 |
-| `departureTime` | `string` | 출발 시각. ISO-8601 형식 (예: `"2025-10-27T10:00:00"`)                  | 아니요 |
+| `mode`          | `string` | 이동 수단. `"walk"`(도보) 또는 `"transit"`(대중교통). **생략 시 'walk'** | 아니요 |
+| `sort`          | `string` | **(도보 모드 전용)** 정렬 기준. `"duration"` (시간순, 기본값) 또는 `"congestion"` (혼잡도순). | 아니요 |
+| `departureTime` | `string` | 출발 시각. ISO-8601 형식 (예: `"2025-10-27T10:00:00"`). 혼잡도 계산 시 활용. | 아니요 |
 
-##### `curl` 요청 예시
+**요청 예시 (`curl`)**
 
-```bash
-curl -X POST http://localhost:8082/api/route \
--H "Content-Type: application/json" \
--d 
-    {
-    "startX": 126.9780,
-    "startY": 37.5665,
-    "endX": 127.0276,
-    "endY": 37.4979,
-    "sort": "congestion",
-    "departureTime": "2025-10-27T10:00:00"
-}
-```
+- **대중교통 경로 요청 시**
+  ```bash
+  curl -X POST http://localhost:8082/api/route \
+  -H "Content-Type: application/json" \
+  -d '{
+      "startX": 126.9780,
+      "startY": 37.5665,
+      "endX": 127.0276,
+      "endY": 37.4979,
+      "mode": "transit"
+  }'
+  ```
 
-#### 프론트엔드 사용 예시 (JavaScript `fetch`)
-
-프론트엔드에서 `fetch` API를 사용하여 경로 추천 API를 호출하는 방법은 다음과 같습니다.
-
-```javascript
-async function getRecommendedRoute(routeRequest) {
-  try {
-    const response = await fetch('http://localhost:8082/api/route', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(routeRequest),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    console.log('Recommended Route:', data);
-    return data;
-  } catch (error) {
-    console.error('Error fetching recommended route:', error);
-  }
-}
-
-// API 호출 예시
-const routeRequest = {
-  startX: 126.9780,
-  startY: 37.5665,
-  endX: 127.0276,
-  endY: 37.4979,
-  sort: 'congestion',
-  departureTime: '2025-10-27T10:00:00',
-};
-
-getRecommendedRoute(routeRequest);
-```
+- **혼잡도순 도보 경로 요청 시**
+  ```bash
+  curl -X POST http://localhost:8082/api/route \
+  -H "Content-Type: application/json" \
+  -d '{
+      "startX": 126.9780,
+      "startY": 37.5665,
+      "endX": 127.0276,
+      "endY": 37.4979,
+      "mode": "walk",
+      "sort": "congestion"
+  }'
+  ```
 
 #### 응답 (Response)
 
-응답은 추천 경로 정보를 담고 있는 `RouteResponseDto` 객체입니다.
+- `mode`가 `"walk"`일 경우, 응답 객체의 `routes` 필드에 결과가 채워집니다.
+- `mode`가 `"transit"`일 경우, 응답 객체의 `transitRoutes` 필드에 결과가 채워집니다.
+
+**`transitRoutes` 응답 예시**
+```json
+{
+    "routes": null,
+    "transitRoutes": [
+        {
+            "totalTime": 2570,
+            "totalDistance": 14618,
+            "walkingDistance": 629,
+            "fare": 0,
+            "segments": [
+                {
+                    "mode": "WALK",
+                    "routeNumber": "도보",
+                    "startName": "출발지",
+                    "endName": "시청",
+                    "duration": 255,
+                    "distance": 308,
+                    "congestion": "약간 붐빔",
+                    "steps": [
+                        "보행자도로를 따라 68m 이동",
+                        "좌회전 후 세종대로를 따라 155m 이동",
+                        "..."
+                    ]
+                },
+                {
+                    "mode": "SUBWAY",
+                    "routeNumber": "수도권1호선",
+                    "startName": "시청",
+                    "endName": "종로3가",
+                    "duration": 300,
+                    "distance": 1540,
+                    "congestion": "보통",
+                    "steps": []
+                }
+            ]
+        }
+    ]
+}
+```
 
 ### 2. 추천 API (`/api/recommend`)
 

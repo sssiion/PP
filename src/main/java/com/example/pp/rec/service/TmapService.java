@@ -7,6 +7,8 @@ import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
+import java.util.Map;
+
 @Service
 public class TmapService {
 
@@ -30,6 +32,23 @@ public class TmapService {
                         .with("startName", "start")
                         .with("endName", "end")
                         .with("searchOption", searchOption))
+                .retrieve()
+                .bodyToMono(String.class);
+    }
+
+    public Mono<String> getTransitRoute(double startX, double startY, double endX, double endY) {
+        Map<String, String> body = Map.of(
+            "startX", String.valueOf(startX),
+            "startY", String.valueOf(startY),
+            "endX", String.valueOf(endX),
+            "endY", String.valueOf(endY)
+        );
+
+        return tmapWebClient.post()
+                .uri("/transit/routes")
+                .header("appKey", tmapApiKey)
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .bodyValue(body)
                 .retrieve()
                 .bodyToMono(String.class);
     }

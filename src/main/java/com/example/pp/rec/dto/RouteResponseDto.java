@@ -13,6 +13,7 @@ import java.util.List;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class RouteResponseDto {
     private List<RecommendedRoute> routes;
+    private List<TransitRoute> transitRoutes;
 
     @Data
     @NoArgsConstructor
@@ -24,8 +25,6 @@ public class RouteResponseDto {
         private List<String> instructions; // Turn-by-turn instructions
         private Object routeGeometry; // The Tmap 'Feature' object for this route
         private List<CongestionPoint> congestionPoints;
-
-
     }
 
     @Data
@@ -35,5 +34,30 @@ public class RouteResponseDto {
         private double latitude;
         private double longitude;
         private String congestionLevel;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class TransitRoute {
+        private int totalTime;
+        private int totalDistance;
+        private int walkingDistance;
+        private int fare;
+        private List<TransitSegment> segments;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class TransitSegment {
+        private String mode; // WALK, BUS, SUBWAY
+        private String routeNumber; // e.g., "2호선" or "143"
+        private String startName;
+        private String endName;
+        private int duration;
+        private int distance;
+        private String congestion; // e.g., "여유", "혼잡"
+        private List<String> steps; // Detailed instructions for WALK mode
     }
 }

@@ -25,6 +25,7 @@ public class RouteController {
             requestDto.getEndX(),
             requestDto.getEndY(),
             requestDto.getSort(),
+            requestDto.getMode(),
             requestDto.getDepartureTime()
         );
     }
