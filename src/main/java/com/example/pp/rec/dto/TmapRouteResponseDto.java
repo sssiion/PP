@@ -22,6 +22,7 @@ public class TmapRouteResponseDto {
     public static class Properties {
         private Integer totalDistance;
         private Integer totalTime; // in seconds
+        private String description; // Route instruction description
     }
 
     @Data

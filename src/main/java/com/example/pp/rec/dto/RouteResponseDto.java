@@ -21,8 +21,11 @@ public class RouteResponseDto {
         private int durationInSeconds;
         private int distanceInMeters;
         private double congestionScore;
+        private List<String> instructions; // Turn-by-turn instructions
         private Object routeGeometry; // The Tmap 'Feature' object for this route
         private List<CongestionPoint> congestionPoints;
+
+
     }
 
     @Data

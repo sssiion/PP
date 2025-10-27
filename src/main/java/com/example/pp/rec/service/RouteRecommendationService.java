@@ -72,6 +72,11 @@ public class RouteRecommendationService {
             int totalTime = summaryProperties != null && summaryProperties.getTotalTime() != null ? summaryProperties.getTotalTime() : 0;
             int totalDistance = summaryProperties != null && summaryProperties.getTotalDistance() != null ? summaryProperties.getTotalDistance() : 0;
 
+            List<String> instructions = tmapResponse.getFeatures().stream()
+                .filter(f -> "Point".equals(f.getGeometry().getType()) && f.getProperties() != null && f.getProperties().getDescription() != null)
+                .map(f -> f.getProperties().getDescription())
+                .collect(Collectors.toList());
+
             List<double[]> allCoordinates = new ArrayList<>();
             for (TmapRouteResponseDto.Feature feature : tmapResponse.getFeatures()) {
                 if ("LineString".equals(feature.getGeometry().getType())) {
@@ -102,6 +107,7 @@ public class RouteRecommendationService {
                                 totalTime,
                                 totalDistance,
                                 congestionScore,
+                                instructions,
                                 tmapResponse,
                                 congestionPoints
                         );
